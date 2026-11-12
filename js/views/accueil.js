@@ -39,9 +39,9 @@ export function renderWelcome(onDone) {
     <div class="card card-pad stack" style="gap:10px">
       <b>1. Récupérer mes données depuis un autre appareil</b>
       <p class="small muted" style="margin:0">Si la synchronisation est déjà activée sur votre Mac ou votre téléphone.</p>
-      <label class="field"><span>Clé GitHub</span><input class="input" id="w-token" autocomplete="off" placeholder="ghp_…" value="${esc(tok)}"></label>
+      <label class="field"><span>Clé GitHub</span><input class="input" id="w-token" name="gh-w-key" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" placeholder="ghp_…" value="${esc(tok)}"></label>
       ${tok ? '<small class="muted">Clé reprise de l’application Plan.</small>' : ''}
-      <label class="field"><span>Phrase secrète</span><input class="input" id="w-pass" type="password" autocomplete="off"></label>
+      <label class="field"><span>Phrase secrète</span><input class="input" id="w-pass" name="sync-w-phrase" type="text" style="-webkit-text-security:disc" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true"></label>
       <button class="btn primary" id="w-sync">Récupérer mes données</button>
     </div>
 

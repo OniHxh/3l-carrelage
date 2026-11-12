@@ -1,6 +1,6 @@
 // Service worker : interface disponible hors connexion + photos et devis servis depuis l'appareil.
 // À chaque mise à jour publiée, incrémenter CACHE.
-const CACHE = '3l-v3';
+const CACHE = '3l-v4';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/boot.js', 'js/app.js', 'js/core.js', 'js/store.js', 'js/ui.js', 'js/docs.js', 'js/local.js', 'js/cloud.js',
@@ -11,7 +11,8 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // cache: 'reload' : ignore le cache HTTP du navigateur (GitHub Pages le garde 10 min), sinon d'anciens fichiers seraient repris
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
@@ -46,7 +47,9 @@ self.addEventListener('fetch', (e) => {
   // Interface : réseau d'abord (mises à jour immédiates), copie locale si hors ligne ou réseau lent
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
-    const net = fetch(e.request).then((res) => { if (res.ok) cache.put(e.request, res.clone()); return res; });
+    // no-cache : toujours revalider auprès de GitHub, pour recevoir chaque mise à jour tout de suite
+    const req = e.request.mode === 'navigate' ? new Request(e.request.url, { cache: 'no-cache', credentials: 'same-origin' }) : new Request(e.request, { cache: 'no-cache' });
+    const net = fetch(req).then((res) => { if (res.ok) cache.put(e.request, res.clone()); return res; });
     const fallback = async () => (await cache.match(e.request, { ignoreSearch: true })) || (e.request.mode === 'navigate' ? cache.match('index.html') : undefined);
     try {
       const r = await Promise.race([net, new Promise((res) => setTimeout(res, 2500)).then(fallback)]);

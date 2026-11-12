@@ -34,8 +34,8 @@ export default {
               <div class="actions"><button class="btn dark" id="sy-now">${icon('refresh')}Synchroniser</button><button class="btn" id="sy-off">Désactiver sur cet appareil</button></div>`
             : `<p class="small muted" style="margin:0">Copie chiffrée dans un Gist GitHub privé. Utilisez la même clé et la même phrase secrète sur chaque appareil.</p>
               <ol class="small" style="margin:0;padding-left:18px;line-height:1.5"><li>${tok ? 'La clé de l’application Plan est reprise automatiquement.' : 'Créez une clé : <a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=3L%20Carrelage%20sync" target="_blank" rel="noopener" style="text-decoration:underline">github.com → Generate token</a>, cochez seulement « gist », puis copiez la clé.'}</li><li>Choisissez une phrase secrète (8 caractères min.) et notez-la : sans elle, la copie en ligne est illisible.</li></ol>
-              <label class="field"><span>Clé GitHub</span><input class="input" id="sy-token" autocomplete="off" placeholder="ghp_…" value="${esc(tok)}"></label>
-              <label class="field"><span>Phrase secrète</span><input class="input" id="sy-pass" type="password" autocomplete="off"></label>
+              <label class="field"><span>Clé GitHub</span><input class="input" id="sy-token" name="gh-sy-key" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" placeholder="ghp_…" value="${esc(tok)}"></label>
+              <label class="field"><span>Phrase secrète</span><input class="input" id="sy-pass" name="sync-sy-phrase" type="text" style="-webkit-text-security:disc" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true"></label>
               <div class="actions"><button class="btn primary" id="sy-on">Activer la synchronisation</button></div>`}
           </div>
           <div class="card card-pad stack"><h2>Sauvegarde</h2>
