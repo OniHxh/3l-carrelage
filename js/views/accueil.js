@@ -67,9 +67,9 @@ export function renderWelcome(onDone) {
     catch (err) { cloud.disable(); toastError(err); busy(b, false, 'Récupérer mes données'); }
   });
   qs('#w-import').addEventListener('click', async (e) => {
+    const b = e.currentTarget; // à lire avant toute attente : vaut null ensuite
     const data = await pickJson();
     if (!data) return;
-    const b = e.currentTarget;
     busy(b, true, 'Import…');
     try {
       const n = await local.merge(data, { takeOwner: true });
