@@ -9,18 +9,26 @@ const frame = (inner) => `<div class="auth">
   <div class="auth-form">${inner}</div>
 </div>`;
 
+// Sélecteur de fichier : le champ est ajouté à la page (Safari ignore parfois le choix sur un champ détaché)
+// et sans filtre de type (Safari grise certains .json).
 export function pickJson() {
   return new Promise((resolve) => {
     const input = document.createElement('input');
-    input.type = 'file'; input.accept = '.json,application/json';
-    input.onchange = async () => {
-      const f = input.files[0];
+    input.type = 'file';
+    input.style.cssText = 'position:fixed;left:-9999px;opacity:0';
+    document.body.append(input);
+    input.addEventListener('change', async () => {
+      const f = input.files?.[0];
+      input.remove();
       if (!f) return resolve(null);
-      try { resolve(JSON.parse(await f.text())); } catch { toastError(new Error('Fichier illisible.')); resolve(null); }
-    };
+      let text;
+      try { text = await readText(f); } catch { toastError(new Error('Impossible de lire le fichier.')); return resolve(null); }
+      try { resolve(JSON.parse(text)); } catch { toastError(new Error(`« ${f.name} » n’est pas un fichier de données 3L Carrelage.`)); resolve(null); }
+    }, { once: true });
     input.click();
   });
 }
+const readText = (f) => (f.text ? f.text() : new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsText(f); }));
 
 export function renderWelcome(onDone) {
   const tok = cloud.planToken();
@@ -63,7 +71,12 @@ export function renderWelcome(onDone) {
     if (!data) return;
     const b = e.currentTarget;
     busy(b, true, 'Import…');
-    try { await local.merge(data, { takeOwner: true }); onDone(); }
+    try {
+      const n = await local.merge(data, { takeOwner: true });
+      if (await local.isEmpty()) throw new Error('Le fichier ne contient aucun utilisateur : import impossible.');
+      b.textContent = `${n} élément(s) importé(s)…`;
+      setTimeout(onDone, 600);
+    }
     catch (err) { toastError(err); busy(b, false, 'Choisir le fichier'); }
   });
   qs('#w-empty').addEventListener('click', async () => {
