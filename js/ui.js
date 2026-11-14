@@ -120,23 +120,54 @@ export function pickImages({ multiple = true, capture = true } = {}) {
     const input = document.createElement('input');
     input.type = 'file'; input.accept = 'image/*'; input.multiple = multiple;
     if (capture && matchMedia('(pointer: coarse)').matches && !multiple) input.capture = 'environment';
+    // Champ placé dans la page : Safari peut sinon le perdre pendant le choix des photos
+    input.style.cssText = 'position:fixed;left:-9999px;width:1px;height:1px;opacity:0';
+    document.body.append(input);
+    const done = (out) => { input.remove(); resolve(out); };
+    input.addEventListener('cancel', () => done([]));
     input.onchange = async () => {
+      const files = [...input.files];
       const out = [];
-      for (const f of input.files) { try { out.push(await compressImage(f)); } catch (e) { toastError(e); } }
-      resolve(out);
+      let ko = 0;
+      if (files.length > 2) toast(`Préparation de ${files.length} photos…`);
+      for (const f of files) {
+        try { out.push(await compressImage(f)); } catch (e) { ko++; console.warn(e); }
+        await new Promise((r) => setTimeout(r, 0)); // laisse le navigateur libérer la mémoire entre deux photos
+      }
+      if (ko) toast(`${ko} photo(s) sur ${files.length} n’ont pas pu être lues. Réessayez-les séparément.`, 'error');
+      done(out);
     };
     input.click();
   });
 }
 
-export async function compressImage(file, max = 1600, quality = 0.78) {
+/** Charge une image (photo iPhone comprise) pour la dessiner. Renvoie { src, w, h, release }. */
+async function decodeImage(file) {
   const bmp = await createImageBitmap(file).catch(() => null);
-  if (!bmp) throw new Error('Image illisible.');
-  const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  if (bmp) return { src: bmp, w: bmp.width, h: bmp.height, release: () => bmp.close?.() };
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Image illisible.')); i.src = url; });
+    return { src: img, w: img.naturalWidth, h: img.naturalHeight, release: () => URL.revokeObjectURL(url) };
+  } catch (e) { URL.revokeObjectURL(url); throw e; }
+}
+
+export async function compressImage(file, max = 1600, quality = 0.78) {
+  const { src, w, h, release } = await decodeImage(file);
   const c = document.createElement('canvas');
-  c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
-  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
-  return c.toDataURL('image/jpeg', quality);
+  try {
+    if (!w || !h) throw new Error('Image illisible.');
+    const scale = Math.min(1, max / Math.max(w, h));
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+    const out = c.toDataURL('image/jpeg', quality);
+    if (!out || out.length < 1000) throw new Error('Photo trop lourde pour l’appareil. Réessayez-la seule.');
+    return out;
+  } finally {
+    // Libère tout de suite la mémoire : Safari sur iPhone bloque après quelques photos sinon
+    release();
+    c.width = 0; c.height = 0;
+  }
 }
 
 export const photoSrc = (p) => p.dataUrl || (p.blobId ? `api/blobs/${p.blobId}` : '');
