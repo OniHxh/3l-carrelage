@@ -5,6 +5,7 @@ import * as local from '../local.js';
 import * as cloud from '../cloud.js';
 import { pickJson } from './accueil.js';
 import { toast, toastError, fieldHtml, readForm, confirmDialog } from '../ui.js';
+import { PRESTATIONS, FOURNITURES, GESTION, referencePrix } from '../../shared/calc.js';
 
 const ENT_FIELDS = [
   { name: 'raisonSociale', label: 'Raison sociale', required: true }, { name: 'formeJuridique', label: 'Forme juridique', placeholder: 'SARL, SAS, EI…' },
@@ -13,11 +14,18 @@ const ENT_FIELDS = [
   { name: 'siret', label: 'SIRET' }, { name: 'rcs', label: 'RCS / RM' },
   { name: 'assuranceDecennale', label: 'Assurance décennale (assureur, n° de contrat, zone)', full: true },
 ];
+const refRow = (p, cur) => `<tr><td>${esc(p.label)}<div class="tiny muted">${esc(p.unite === '%' ? '%' : '€ / ' + p.unite)} · défaut ${p.min}–${p.max}</div></td>
+  <td><input class="input" type="number" inputmode="decimal" step="any" min="0" name="${p.key}.min" value="${cur.min}"></td>
+  <td><input class="input" type="number" inputmode="decimal" step="any" min="0" name="${p.key}.max" value="${cur.max}"></td></tr>`;
+const refTable = (id, titre, list, cur) => `<div class="card"><div class="card-head"><h2>${titre}</h2></div><div class="table-wrap"><table class="table perm-table" id="${id}"><thead><tr><th style="text-align:left">Prestation</th><th>Min</th><th>Max</th></tr></thead><tbody>${list.map((p) => refRow(p, cur[p.key])).join('')}</tbody></table></div></div>`;
+const readRef = (table, list) => Object.fromEntries(list.map((p) => [p.key, { min: Number(table.querySelector(`[name="${p.key}.min"]`).value || 0), max: Number(table.querySelector(`[name="${p.key}.max"]`).value || 0) }]));
+
 export default {
   main: {
     title: 'Paramètres', live: false,
     render({ query }) {
-      const tab = query.tab === 'donnees' ? 'donnees' : 'entreprise';
+      const prixOk = app.can('ca', 1);
+      const tab = query.tab === 'donnees' ? 'donnees' : query.tab === 'prix' && prixOk ? 'prix' : 'entreprise';
       const s = store.settings();
       const canW = app.can('parametres', 2);
       let body = '';
@@ -25,6 +33,16 @@ export default {
         body = `<div class="card card-pad"><form class="form" id="ent">${ENT_FIELDS.map((f) => fieldHtml(f, s.entreprise || {})).join('')}</form>
           <div class="row" style="margin-top:16px;justify-content:flex-end">${canW ? '<button class="btn primary" id="save-ent">Enregistrer</button>' : ''}</div>
           <p class="small muted">Ces informations apparaissent sur les rapports de chantier PDF, avec le logo 3L Carrelage.</p></div>`;
+      }
+      if (tab === 'prix') {
+        const ref = referencePrix(s.prixRef);
+        const canP = canW && app.can('ca', 2);
+        body = `<div class="stack">
+          <p class="small muted" style="margin:0">Ces fourchettes servent d’indicateurs dans le <a href="#/outils" style="text-decoration:underline">chiffrage</a>. Prix HT pratiqués à Strasbourg et dans le Bas-Rhin pour une situation standard (carreaux 30 à 60 cm, pose droite, support sain). Les majorations (format, type de pose, accès…) s’appliquent automatiquement. Ajustez-les avec vos propres devis acceptés.</p>
+          <div class="card card-pad"><h2 style="margin-top:0">Vos coûts internes</h2><form class="form" id="gest">${GESTION.map((g) => fieldHtml({ name: g.key, label: g.label, type: 'number', help: g.help }, ref.gestion)).join('')}</form></div>
+          <div class="grid g2">${refTable('t-prest', 'Prestations (pose seule)', PRESTATIONS, ref.prestations)}${refTable('t-fourn', 'Fournitures (prix d’achat)', FOURNITURES, ref.fournitures)}</div>
+          ${canP ? '<div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" id="reset-prix">Revenir aux valeurs par défaut</button><button class="btn primary" id="save-prix">Enregistrer</button></div>' : ''}
+        </div>`;
       }
       if (tab === 'donnees') {
         const on = cloud.enabled(), tok = cloud.planToken();
@@ -47,13 +65,22 @@ export default {
             <p class="small muted" style="margin:0"><b>Installer l’application :</b> sur iPhone, Safari → Partager → « Sur l’écran d’accueil ». Sur Mac (Chrome), icône d’installation dans la barre d’adresse ; sur Mac (Safari), Fichier → « Ajouter au Dock ».</p>
           </div></div>`;
       }
-      const tabs = [['entreprise', 'Entreprise'], ...(app.can('parametres', 3) ? [['donnees', 'Données & appareil']] : [])];
+      const tabs = [['entreprise', 'Entreprise'], ...(prixOk ? [['prix', 'Prix de référence']] : []), ...(app.can('parametres', 3) ? [['donnees', 'Données & appareil']] : [])];
       return `<div class="page-head"><div><h1>Paramètres</h1></div></div>
         <div class="tabs">${tabs.map(([k, l]) => `<a class="tab ${tab === k ? 'active' : ''}" href="#/parametres?tab=${k}">${l}</a>`).join('')}</div>${body}`;
     },
     mount(root) {
       const saveSettings = async (patch) => { await store.save('parametres', { ...store.settings(), id: 'parametres', ...patch }); toast('Paramètres enregistrés.'); };
       qs('#save-ent', root)?.addEventListener('click', () => saveSettings({ entreprise: { ...(store.settings().entreprise || {}), ...readForm(qs('#ent', root), ENT_FIELDS) } }).catch(toastError));
+      qs('#save-prix', root)?.addEventListener('click', () => {
+        const gestion = readForm(qs('#gest', root), GESTION.map((g) => ({ name: g.key, type: 'number' })));
+        const prixRef = { gestion, prestations: readRef(qs('#t-prest', root), PRESTATIONS), fournitures: readRef(qs('#t-fourn', root), FOURNITURES) };
+        saveSettings({ prixRef }).catch(toastError);
+      });
+      qs('#reset-prix', root)?.addEventListener('click', async () => {
+        if (!(await confirmDialog('Remplacer vos prix de référence et coûts internes par les valeurs par défaut ?', { ok: 'Rétablir' }))) return;
+        saveSettings({ prixRef: null }).then(() => app.go('#/parametres?tab=prix')).catch(toastError);
+      });
       qs('#exp', root)?.addEventListener('click', async () => {
         try {
           const data = await local.snapshot({ withBlobs: true });

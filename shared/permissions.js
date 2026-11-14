@@ -48,7 +48,7 @@ export function canType(user, type, level = 1) {
 }
 
 /** Champs d'argent d'une fiche, réservés au module « ca ». */
-export const MONEY_FIELDS = { chantier: ['prixHT', 'chiffrage'] };
+export const MONEY_FIELDS = { chantier: ['prixHT', 'chiffrage'], parametres: ['prixRef'] };
 
 /** Retire les champs d'argent d'une fiche pour qui n'a pas accès au chiffre d'affaires. */
 export function hideMoney(user, rec) {
