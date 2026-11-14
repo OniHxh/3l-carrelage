@@ -84,7 +84,8 @@ export function chiffrageChantier(v = {}, ref = REFERENCE) {
   const heuresJour = num(v.heuresParJour) || 8;
   // Temps et matériaux des autres prestations (dépose, ragréage, chape, étanchéité, plinthes, marches, douche…)
   let heuresAnnexes = 0, materiauxPrestations = 0;
-  for (const p of Object.values(ref.prestations)) {
+  for (const p0 of Object.values(ref.prestations)) {
+    const p = prestationEffective(p0, v);
     if (!p.heures && !p.cout && !p.coutPct) continue;
     const qte = p.qte === null ? 1 : num(p.qte === 'surfaceSol' ? surfaceSol : v[p.qte]);
     const prix = num(v[p.field]);
@@ -119,8 +120,9 @@ export function chiffrageChantier(v = {}, ref = REFERENCE) {
   const mainOeuvreHT = round2(pose + faience + depose + ragreage + chape + etancheite + plinthes + profiles + marches + douches + evacuation + deplacement);
   // Fournitures (prix d'achat)
   const carrelageAchat = fourni ? round2(mat.surfaceCommande * num(v.prixCarrelageM2)) : 0;
-  const colleAchat = round2(mat.sacsColle * num(v.prixSacColle));
-  const jointAchat = round2(Math.ceil(mat.jointKg) * num(v.prixJointKg));
+  const produits = !produitsClient(v); // colle et joint achetés par nous
+  const colleAchat = produits ? round2(mat.sacsColle * num(v.prixSacColle)) : 0;
+  const jointAchat = produits ? round2(Math.ceil(mat.jointKg) * num(v.prixJointKg)) : 0;
   const fournituresAchat = round2(carrelageAchat + colleAchat + jointAchat + num(v.autresFrais));
   const fournituresVente = round2(fournituresAchat * (1 + num(v.margeFournituresPct) / 100));
   const totalHT = round2(mainOeuvreHT + fournituresVente);
@@ -145,11 +147,11 @@ export const PRESTATIONS = [
   { key: 'pose', field: 'prixPoseM2', qte: 'surfaceSol', label: 'Pose carrelage sol', unite: 'm²', min: 30, max: 50, majore: true },
   { key: 'faience', field: 'prixFaienceM2', qte: 'surfaceMur', label: 'Pose faïence murale', unite: 'm²', min: 35, max: 55, majore: true },
   { key: 'depose', field: 'prixDeposeM2', qte: 'surfaceSol', label: 'Dépose ancien carrelage', unite: 'm²', min: 15, max: 30, optionnel: true, heures: 0.35, cout: 0 },
-  { key: 'ragreage', field: 'prixRagreageM2', qte: 'surfaceSol', label: 'Ragréage fourni-posé (primaire compris)', unite: 'm²', min: 15, max: 28, optionnel: true, heures: 0.12, cout: 6 },
-  { key: 'chape', field: 'prixChapeM2', qte: 'surfaceChape', label: 'Chape fourni-posé', unite: 'm²', min: 25, max: 45, heures: 0.3, cout: 10 },
-  { key: 'etancheite', field: 'prixEtancheiteM2', qte: 'surfaceEtancheite', label: 'Étanchéité SPEC / SEL fourni-posé', unite: 'm²', min: 30, max: 50, heures: 0.3, cout: 18 },
+  { key: 'ragreage', field: 'prixRagreageM2', qte: 'surfaceSol', label: 'Ragréage fourni-posé (primaire compris)', unite: 'm²', min: 15, max: 28, poseMin: 8, poseMax: 16, optionnel: true, heures: 0.12, cout: 6 },
+  { key: 'chape', field: 'prixChapeM2', qte: 'surfaceChape', label: 'Chape fourni-posé', unite: 'm²', min: 25, max: 45, poseMin: 15, poseMax: 28, heures: 0.3, cout: 10 },
+  { key: 'etancheite', field: 'prixEtancheiteM2', qte: 'surfaceEtancheite', label: 'Étanchéité SPEC / SEL fourni-posé', unite: 'm²', min: 30, max: 50, poseMin: 15, poseMax: 28, heures: 0.3, cout: 18 },
   { key: 'plinthe', field: 'prixPlintheMl', qte: 'plinthesMl', label: 'Pose plinthes', unite: 'ml', min: 10, max: 18, heures: 0.2, cout: 0 },
-  { key: 'profile', field: 'prixProfileMl', qte: 'profilesMl', label: 'Profilés, seuils, nez de marche fourni-posé', unite: 'ml', min: 15, max: 30, heures: 0.15, cout: 9 },
+  { key: 'profile', field: 'prixProfileMl', qte: 'profilesMl', label: 'Profilés, seuils, nez de marche fourni-posé', unite: 'ml', min: 15, max: 30, poseMin: 8, poseMax: 15, heures: 0.15, cout: 9 },
   { key: 'marche', field: 'prixMarche', qte: 'nbMarches', label: 'Marche d’escalier (pose)', unite: 'marche', min: 60, max: 110, majore: true, heures: 1.5, cout: 0 },
   { key: 'douche', field: 'forfaitDouche', qte: 'nbDouches', label: 'Douche à l’italienne (forme de pente, siphon, hors carrelage)', unite: 'forfait', min: 900, max: 1800, heures: 12, cout: 250 },
   { key: 'evacuation', field: 'evacuationHT', qte: null, label: 'Évacuation des gravats (benne, déchetterie)', unite: 'forfait', min: 100, max: 350, optionnel: true, coutPct: 60 },
@@ -206,6 +208,14 @@ export function referencePrix(custom = {}) {
   return { prestations: pick(PRESTATIONS, custom.prestations), fournitures: pick(FOURNITURES, custom.fournitures), gestion };
 }
 export const REFERENCE = referencePrix();
+
+/** Colle, joint, primaire, ragréage, étanchéité, profilés : fournis par le client ? */
+export const produitsClient = (v = {}) => v.produitsFourni === 'client';
+/** Prestation « fourni-posé » ramenée à la pose seule quand le client fournit les produits (pas de matériaux à acheter). */
+export function prestationEffective(p, v = {}) {
+  if (!produitsClient(v) || p.poseMin == null) return p;
+  return { ...p, min: Math.min(p.poseMin, p.poseMax), max: Math.max(p.poseMin, p.poseMax), cout: 0, label: p.label.replace('fourni-posé', 'pose seule (produit fourni par le client)') };
+}
 
 /** Majoration liée au format du carreau (plus grand côté, en cm). */
 export function majorationFormat(L, H) {
@@ -272,12 +282,17 @@ export function aideChiffrage(v = {}, r = chiffrageChantier(v), ref = REFERENCE)
 
   // 2. Fourchettes par prestation
   const prix = {};
-  const lignes = [...Object.values(ref.prestations), ...Object.values(ref.fournitures)];
+  const lignes = [...Object.values(ref.prestations).map((p) => prestationEffective(p, v)), ...Object.values(ref.fournitures)];
+  const pClient = produitsClient(v), cClient = v.carrelageFourni === 'client';
   for (const p of lignes) {
     const k = p.majore ? coef : 1;
     const min = round2(p.min * k), max = round2(p.max * k);
     const qte = p.qte === undefined ? null : p.qte === null ? 1 : num(p.qte === 'surfaceSol' || p.qte === 'surfaceMur' ? r[p.qte] : v[p.qte]);
-    prix[p.field] = { ...p, min, max, conseille: arrondi((min + max) / 2), niveau: niveauPrix(v[p.field], min, max), qte, utile: qte == null || qte > 0 };
+    let utile = qte == null || qte > 0;
+    if (pClient && (p.key === 'colle' || p.key === 'joint')) utile = false;
+    if (cClient && p.key === 'carrelage') utile = false;
+    if (pClient && cClient && p.key === 'margeFournitures') utile = false;
+    prix[p.field] = { ...p, min, max, conseille: arrondi((min + max) / 2), niveau: niveauPrix(v[p.field], min, max), qte, utile };
   }
 
   // 3. Rendement conseillé
@@ -328,6 +343,7 @@ export function aideChiffrage(v = {}, r = chiffrageChantier(v), ref = REFERENCE)
   }
   if (num(v.margeFournituresPct) < 10 && v.carrelageFourni !== 'client' && r.fournituresAchat > 0) add('warn', 'Marge sur fournitures sous 10 % : elle couvre à peine le temps d’achat, de transport et la casse.');
   if (v.carrelageFourni === 'client') add('info', 'Carrelage fourni par le client : pas de marge sur le carrelage. Précisez sur le devis que la quantité, la qualité et les défauts du carrelage ne sont pas de votre responsabilité.');
+  if (pClient) add('info', 'Colle, joint et produits (primaire, ragréage, étanchéité) fournis par le client : prix en pose seule. Précisez sur le devis les références et quantités à prévoir, et que le chantier attend si un produit manque.');
 
   // Situation et oublis techniques
   if ((v.support === 'reprendre' || v.support === 'bois') && !num(v.prixRagreageM2) && r.surfaceSol > 0) add('warn', v.support === 'bois' ? 'Plancher bois : prévoir une préparation (panneaux, natte de désolidarisation ou ragréage fibré) et la facturer.' : 'Support à reprendre mais aucun ragréage facturé.');
@@ -377,6 +393,134 @@ export function aideChiffrage(v = {}, r = chiffrageChantier(v), ref = REFERENCE)
   alertes.sort((a, b) => ordre[a.niveau] - ordre[b.niveau]);
 
   return { majorations, majPct, majPctBrut, coef, prix, rendementConseille, rentab, verdict, alertes };
+}
+
+// ---------- Estimation d'une visite client : fourchette basse / moyenne / haute ----------
+/** Type de pièce déduit du nom et des travaux notés (si non précisé). */
+export function typePieceAuto(p = {}) {
+  const t = p.travaux || [], nom = String(p.nom || '').toLowerCase();
+  if (t.includes('exterieur') || /terrasse|balcon|ext[ée]rieur|jardin|piscine/.test(nom)) return 'exterieur';
+  if (t.some((x) => ['faience', 'etancheite', 'douche'].includes(x)) || /bain|sdb|douche|wc|toilette|salle d.eau/.test(nom)) return 'sdb';
+  const sol = num(p.surfaceSol) || num(p.longueur) * num(p.largeur);
+  return sol >= 20 ? 'ouverte' : 'standard';
+}
+// Travaux de la visite → prestation de référence, quantité, majorée ou non
+const LIGNES_VISITE = [
+  ['pose_sol', 'pose', 'sol'], ['faience', 'faience', 'mur'], ['depose', 'depose', 'sol'], ['ragreage', 'ragreage', 'sol'],
+  ['chape', 'chape', 'sol'], ['etancheite', 'etancheite', 'etanche'], ['plinthes', 'plinthe', 'plinthes'],
+  ['escalier', 'marche', 'marches'], ['douche', 'douche', 'un'],
+];
+export const SIT_PIECE = ['piece', 'difficulte', 'obstacles', 'acces']; // réglables pièce par pièce
+
+/**
+ * Estimation d'une visite : pour chaque pièce, les travaux notés × les fourchettes du marché,
+ * majorées selon la situation (visite + pièce). Bas = bas de fourchette, moyen = prix conseillé, haut = haut de fourchette.
+ * Ne remplace pas le calculateur : c'est un ordre de grandeur à donner au client dès la visite.
+ */
+export function estimationVisite(vis = {}, ref = REFERENCE) {
+  const g = ref.gestion, P = ref.prestations;
+  const pieces = vis.pieces || [];
+  const surfSol = (p) => round2(num(p.surfaceSol) || num(p.longueur) * num(p.largeur));
+  const totalSurf = pieces.reduce((s, p) => s + surfSol(p) + num(p.surfaceMur), 0);
+  const surf = majorationSurface(totalSurf);
+  const notes = [];
+  const mat = { bas: 0, moyen: 0, haut: 0 }; // coûts d'achat (matériaux des prestations + fournitures)
+  const addMat = (b, m, h) => { mat.bas += b; mat.moyen += m; mat.haut += h; };
+  const res = pieces.map((p, i) => {
+    const sol = surfSol(p);
+    const q = { sol, mur: num(p.surfaceMur), etanche: num(p.surfaceEtancheite), plinthes: num(p.plinthesMl), marches: num(p.nbMarches), un: 1 };
+    const t = p.travaux || [];
+    const nom = p.nom || `Pièce ${i + 1}`;
+    // Majorations : visite, puis réglages propres à la pièce
+    const sit = { ...vis, piece: p.piece || typePieceAuto(p) };
+    for (const k of SIT_PIECE) if (p[k]) sit[k] = p[k];
+    const majorations = [];
+    const fmt = majorationFormat(p.formatL || vis.formatL, p.formatH || vis.formatH);
+    if (fmt.pct) majorations.push({ label: fmt.label, pct: fmt.pct });
+    // Petit chantier : toutes les pièces sont majorées. Grand chantier : la remise ne vaut que pour les grandes pièces.
+    if (surf.pct > 0 || (surf.pct < 0 && sol + q.mur >= 40)) majorations.push({ label: surf.label, pct: surf.pct });
+    for (const [k, s] of Object.entries(SITUATIONS)) {
+      const o = s.options.find((x) => x[0] === sit[k]);
+      if (o && o[2]) majorations.push({ label: `${s.label} : ${o[1]}`, pct: o[2] });
+    }
+    const majPct = Math.max(MAJ_MIN, Math.min(MAJ_MAX, majorations.reduce((s, m) => s + m.pct, 0)));
+    const coef = 1 + majPct / 100;
+    const lignes = [];
+    let heuresAnnexes = 0;
+    for (const [trav, key, qk] of LIGNES_VISITE) {
+      if (!t.includes(trav)) continue;
+      const pr = prestationEffective(P[key], vis);
+      let qte = q[qk];
+      if (trav === 'etancheite' && !qte) { notes.push(`${nom} : surface à étancher non notée.`); continue; }
+      if (!qte) { notes.push(`${nom} : ${pr.label.toLowerCase()} coché mais quantité non notée.`); continue; }
+      const k = pr.majore ? coef : 1;
+      const min = round2(pr.min * k), max = round2(pr.max * k), moy = arrondi((min + max) / 2);
+      lignes.push({ key, label: pr.label, qte: round2(qte), unite: pr.unite, min, moy, max, bas: round2(qte * min), moyen: round2(qte * moy), haut: round2(qte * max) });
+      heuresAnnexes += qte * num(pr.heures);
+      addMat(qte * num(pr.cout), qte * num(pr.cout), qte * num(pr.cout));
+    }
+    if (t.includes('joints')) notes.push(`${nom} : réfection des joints à chiffrer à part (pas de prix de référence).`);
+    const difficulte = Math.max(0, majPct - (majorations.some((m) => m.label === surf.label) && surf.pct > 0 ? surf.pct : 0));
+    const rendement = num(g.rendementBase) / (1 + difficulte / 100);
+    const sPose = t.includes('pose_sol') || t.includes('exterieur') ? q.sol : 0, sFai = t.includes('faience') ? q.mur : 0;
+    const heures = round2((rendement > 0 ? sPose / rendement + sFai / (rendement * FACTEUR_FAIENCE) : 0) * 8 + heuresAnnexes);
+    const sum = (k) => round2(lignes.reduce((s, l) => s + l[k], 0));
+    return { id: p.id, nom, piece: sit.piece, majorations, majPct, rendement: round2(rendement), heures, lignes, bas: sum('bas'), moyen: sum('moyen'), haut: sum('haut') };
+  });
+
+  // Lignes communes à la visite
+  const communs = [];
+  const toutes = pieces.flatMap((p) => p.travaux || []);
+  if (toutes.includes('depose') || toutes.includes('evacuation')) {
+    const e = P.evacuation;
+    const moy = arrondi((e.min + e.max) / 2), pct = num(e.coutPct) / 100;
+    communs.push({ key: 'evacuation', label: e.label, qte: 1, unite: e.unite, min: e.min, moy, max: e.max, bas: e.min, moyen: moy, haut: e.max });
+    addMat(e.min * pct, moy * pct, e.max * pct);
+  }
+  const heures = round2(res.reduce((s, r) => s + r.heures, 0));
+  const jours = round2(heures / 8);
+  const km = num(vis.distanceKm);
+  if (km > num(g.kmInclus) && jours) {
+    const d = round2(Math.ceil(jours) * 2 * (km - num(g.kmInclus)) * num(g.prixKm));
+    communs.push({ key: 'deplacement', label: `Déplacement (${fr(km)} km, ${Math.ceil(jours)} jour(s) à 1 personne)`, qte: 1, unite: 'forfait', min: d, moy: d, max: d, bas: d, moyen: d, haut: d });
+  }
+  // Fournitures achetées par nous : carrelage (si « Nous ») et colle + joint (sauf si le client les fournit)
+  const sTot = round2(res.reduce((s, r) => s + r.lignes.filter((l) => l.key === 'pose' || l.key === 'faience').reduce((a, l) => a + l.qte, 0), 0));
+  const avecCarrelage = vis.carrelageFourni === 'entreprise', avecProduits = !produitsClient(vis);
+  if (sTot && (avecCarrelage || avecProduits)) {
+    const F = ref.fournitures;
+    const sacs = Math.ceil((sTot * 5) / 25), jointKg = Math.ceil(sTot * 0.5), commande = round2(sTot * 1.1);
+    const mid = (x) => (x.min + x.max) / 2;
+    const achat = (pick) => round2((avecCarrelage ? commande * pick(F.carrelage) : 0) + (avecProduits ? sacs * pick(F.colle) + jointKg * pick(F.joint) : 0));
+    const aMin = achat((x) => x.min), aMoy = achat(mid), aMax = achat((x) => x.max);
+    const vente = (a, m) => round2(a * (1 + m / 100));
+    const quoi = [avecCarrelage && `carrelage ${fr(commande)} m² (10 % de pertes)`, avecProduits && `${sacs} sacs de colle, ${jointKg} kg de joint`].filter(Boolean).join(', ');
+    communs.push({ key: 'fournitures', label: `Fournitures avec marge : ${quoi}`, qte: 1, unite: 'forfait',
+      bas: vente(aMin, F.margeFournitures.min), moyen: vente(aMoy, mid(F.margeFournitures)), haut: vente(aMax, F.margeFournitures.max) });
+    addMat(aMin, aMoy, aMax);
+  }
+  if (sTot && !avecCarrelage && vis.carrelageFourni !== 'client') notes.push('Carrelage non compris : indiquez qui le fournit pour l’ajouter.');
+  else if (sTot && !avecCarrelage && !avecProduits) notes.push('Pose seule : carrelage, colle, joint et produits fournis par le client.');
+  else if (sTot && !avecCarrelage) notes.push('Carrelage fourni par le client : seuls la colle et le joint sont comptés en fournitures.');
+  else if (sTot && !avecProduits) notes.push('Colle, joint et produits fournis par le client : seul le carrelage est compté en fournitures.');
+
+  const tot = (k) => round2(res.reduce((s, r) => s + r[k], 0) + communs.reduce((s, l) => s + l[k], 0));
+  let bas = tot('bas'), moyen = tot('moyen'), haut = tot('haut');
+  const minimum = num(g.minimumHT);
+  if (moyen > 0 && moyen < minimum) { notes.push(`Petit chantier : minimum de facturation ${fr(minimum)} € HT appliqué.`); bas = Math.max(bas, minimum); moyen = Math.max(moyen, minimum); haut = Math.max(haut, minimum); }
+  // Contrôle de rentabilité : prix qui couvre vos coûts (main-d'œuvre, matériaux, déplacement, frais généraux)
+  const fg = num(g.fraisGenerauxPct) / 100;
+  const deplCout = km && jours ? Math.ceil(jours) * 2 * km * num(g.prixKm) : 0;
+  const plancher = fg < 1 && heures ? round2((heures * num(g.coutHoraire) + mat.moyen + deplCout) / (1 - fg)) : 0;
+  const depl = communs.find((l) => l.key === 'deplacement')?.moyen || 0;
+  const taux = (k, prix) => (heures ? round2((prix - mat[k] - depl) / heures) : null);
+  if (plancher && bas < plancher) notes.push(`L’estimation basse (${fr(Math.round(bas))} €) ne couvre pas vos coûts estimés (${fr(Math.round(plancher))} €) : ne descendez pas en dessous.`);
+  const tva = 10; // logement de plus de 2 ans
+  return {
+    pieces: res, communs, bas, moyen, haut, heures, jours, plancher,
+    tauxHoraire: { bas: taux('bas', bas), moyen: taux('moyen', moyen), haut: taux('haut', haut) }, tauxCible: num(g.tauxHoraireCible),
+    tva, ttc: { bas: round2(bas * (1 + tva / 100)), moyen: round2(moyen * (1 + tva / 100)), haut: round2(haut * (1 + tva / 100)) }, notes,
+  };
 }
 
 /** Temps passé sur un chantier : heures pointées, heures prévues, estimation de fin. */

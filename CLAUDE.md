@@ -28,8 +28,11 @@ Remplace l'ancienne version serveur (Node.js + SQLite sur le MacBook, publiée v
 ## Chiffrage et visites
 
 - `shared/calc.js` : `chiffrageChantier` (prix, temps de toutes les tâches, matériaux fourni-posé), `aideChiffrage` (fourchettes ajustées, majorations plafonnées à +100 %, rentabilité, prix au temps passé, alertes), `referencePrix` (valeurs par défaut fusionnées avec `parametres.prixRef`). Tests dans `~/3L-Carrelage-ERP/test/calc.test.js` (copier `calc.js` là-bas puis `npm test`).
+- `js/devis.js` : bouton « Devis PDF » du calculateur. `lignesDevis(v, r)` rédige les prestations (pose, faïence, préparation, étanchéité, plinthes, marches, douche, gravats, déplacement, fournitures avec marge) selon qui fournit carrelage et produits ; aperçu modifiable (textes, qté, unité, PU, lignes) puis impression PDF via `printDoc` (`js/docs.js`). Rien n'est enregistré.
 - `js/views/outils.js` : calculateur (indicateurs sous les prix, « Remplir les prix conseillés », « Réinitialiser », pré-remplissage depuis une visite `#/outils?visite=<id>`).
 - `js/views/visites.js` : type `visite` (client, pièces avec mesures et travaux, situation, notes) ; photos = type `photo` avec `visiteId` (+ `pieceId`). « Créer le chantier » crée client + chantier prospect + note et rattache les photos (`chantierId`).
+- `produitsFourni === 'client'` (calculateur et visite) : colle et joint non achetés, ragréage / chape / étanchéité / profilés en pose seule (`poseMin`/`poseMax`, `prestationEffective`).
+- Estimation basse / moyenne / haute d'une visite : `estimationVisite(vis, ref)` dans `shared/calc.js`. Chaque pièce : travaux cochés × fourchettes, majorées selon la situation de la visite + réglages de la pièce (`formatL/H`, `piece` auto via `typePieceAuto`, `difficulte`, `obstacles`, `acces` = `SIT_PIECE`). Carrelage compté si `carrelageFourni === 'entreprise'`, colle + joint sauf si `produitsFourni === 'client'`. Affichée dans la visite (droit `ca` ≥ 1), mise à jour en direct, et dans la liste des visites.
 
 ## Synchronisation entre appareils (`js/cloud.js`)
 

@@ -470,3 +470,48 @@ input[type="checkbox"] { accent-color: var(--red); width: 18px; height: 18px; }
 .pgrid .cell.pt { background: transparent; box-shadow: inset 0 0 0 2px var(--c); color: var(--ink); }
 .pgrid .who-in { display: flex; align-items: center; gap: 8px; line-height: 1.2; }
 .pgrid th.who .avatar { margin: 0; flex: none; }
+
+/* Estimation d'une visite (basse / moyenne / haute) */
+.est-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.est-tiles span { line-height: 1.45; }
+@media (max-width: 420px) { .est-tiles { gap: 8px; } .est-tiles div { padding: 10px; } .est-tiles b { font-size: 18px; } }
+.est-vals { display: grid; grid-template-columns: repeat(3, minmax(64px, auto)); gap: 10px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; }
+.est-vals span { color: var(--ink-3); font-size: 13px; }
+.est-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding: 0 14px 6px 0; }
+.est-head .est-vals b, .est-head .est-vals span { font-size: 12px; font-weight: 600; color: var(--ink-3); }
+.est-piece { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+.est-piece summary { display: flex; align-items: center; gap: 10px; cursor: pointer; list-style: none; }
+.est-piece summary::-webkit-details-marker { display: none; }
+.est-piece[open] summary { margin-bottom: 8px; }
+.est-piece .calc-lines .li { padding: 8px 0; }
+.est-reglages { margin-top: 4px; }
+@media (max-width: 560px) {
+  .est-vals { grid-template-columns: repeat(3, minmax(54px, auto)); gap: 6px; font-size: 13px; }
+  .est-piece summary, .est-piece .li { flex-wrap: wrap; }
+  .est-piece summary .est-vals, .est-piece .li .est-vals { width: 100%; }
+}
+
+/* Devis PDF depuis le calculateur : aperçu modifiable */
+.devis-edit th, .devis-edit td { vertical-align: top; }
+.devis-edit td:first-child { min-width: 260px; width: 55%; }
+.devis-edit td:nth-child(2) { min-width: 80px; }
+.devis-edit td:nth-child(3) { min-width: 104px; }
+.devis-edit td:nth-child(4) { min-width: 100px; }
+.devis-edit input, .devis-edit select { width: 100%; }
+@media (max-width: 700px) {
+  .devis-edit thead { display: none; }
+  .devis-edit, .devis-edit tbody { display: block; }
+  .devis-edit tr { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .devis-edit td { display: block; padding: 0 !important; min-width: 0 !important; width: auto !important; border: 0 !important; }
+  .devis-edit td:first-child { grid-column: 1 / -1; }
+  .devis-edit td.r { grid-column: 1 / -2; padding-top: 2px !important; font-weight: 600; }
+  .devis-edit td:last-child { grid-column: -2 / -1; grid-row: 3; }
+}
+.devis-edit td.r { white-space: nowrap; padding-top: 14px; }
+.devis-edit textarea { resize: vertical; min-height: 64px; }
+.devis-totaux { margin-left: auto; width: min(300px, 100%); }
+.devis-totaux div { display: flex; justify-content: space-between; padding: 4px 0; font-variant-numeric: tabular-nums; }
+.devis-totaux .ttc { border-top: 2px solid var(--ink); margin-top: 4px; padding-top: 8px; font-size: 17px; }
+.pd-table thead { display: table-header-group; }
+.pd-table tr { break-inside: avoid; }
+.pd-totals, .pd-sign { break-inside: avoid; }

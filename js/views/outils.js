@@ -2,6 +2,7 @@ import { esc, icon, number, qs, qsa } from '../core.js';
 import * as store from '../store.js';
 import { app } from '../app.js';
 import { fieldHtml, readForm, modal, toast, toastError, confirmDialog } from '../ui.js';
+import { devisModal } from '../devis.js';
 import { chiffrageChantier, aideChiffrage, referencePrix, SITUATIONS, NIVEAUX } from '../../shared/calc.js';
 
 const eur = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(n) || 0);
@@ -34,11 +35,11 @@ const F_PRIX = [
   { name: 'prixPoseM2', label: 'Pose sol (€ HT / m²)', type: 'number', default: 40 },
   { name: 'prixFaienceM2', label: 'Pose faïence (€ HT / m²)', type: 'number' },
   { name: 'prixDeposeM2', label: 'Dépose ancien carrelage (€ / m²)', type: 'number', default: 0, help: '0 si pas de dépose.' },
-  { name: 'prixRagreageM2', label: 'Ragréage fourni-posé (€ / m²)', type: 'number', default: 0, help: '0 si pas de ragréage. Primaire et produit compris.' },
-  { name: 'surfaceChape', label: 'Chape (m²)', type: 'number', default: 0 }, { name: 'prixChapeM2', label: 'Chape fourni-posé (€ / m²)', type: 'number' },
-  { name: 'surfaceEtancheite', label: 'Étanchéité SPEC / SEL (m²)', type: 'number', default: 0, help: 'Zone de douche, murs et sol exposés.' }, { name: 'prixEtancheiteM2', label: 'Étanchéité fourni-posé (€ / m²)', type: 'number' },
+  { name: 'prixRagreageM2', label: 'Ragréage (€ / m²)', type: 'number', default: 0, help: '0 si pas de ragréage. Primaire et produit compris, sauf si le client les fournit.' },
+  { name: 'surfaceChape', label: 'Chape (m²)', type: 'number', default: 0 }, { name: 'prixChapeM2', label: 'Chape (€ / m²)', type: 'number' },
+  { name: 'surfaceEtancheite', label: 'Étanchéité SPEC / SEL (m²)', type: 'number', default: 0, help: 'Zone de douche, murs et sol exposés.' }, { name: 'prixEtancheiteM2', label: 'Étanchéité (€ / m²)', type: 'number' },
   { name: 'plinthesMl', label: 'Plinthes (mètres linéaires)', type: 'number', default: 0 }, { name: 'prixPlintheMl', label: 'Pose plinthes (€ / ml)', type: 'number', default: 12 },
-  { name: 'profilesMl', label: 'Profilés, seuils, nez de marche (ml)', type: 'number', default: 0 }, { name: 'prixProfileMl', label: 'Profilés fourni-posé (€ / ml)', type: 'number' },
+  { name: 'profilesMl', label: 'Profilés, seuils, nez de marche (ml)', type: 'number', default: 0 }, { name: 'prixProfileMl', label: 'Profilés (€ / ml)', type: 'number' },
   { name: 'nbMarches', label: 'Marches d’escalier (nombre)', type: 'number', default: 0 }, { name: 'prixMarche', label: 'Prix par marche (€)', type: 'number' },
   { name: 'nbDouches', label: 'Douches à l’italienne (nombre)', type: 'number', default: 0 }, { name: 'forfaitDouche', label: 'Forfait douche (€, hors carrelage)', type: 'number' },
   { name: 'evacuationHT', label: 'Évacuation des gravats (€ forfait)', type: 'number', default: 0 },
@@ -47,6 +48,7 @@ const F_PRIX = [
 // Fournitures (prix d'achat)
 const F_FOURNITURES = [
   { name: 'carrelageFourni', label: 'Carrelage fourni par', type: 'select', options: [['entreprise', 'Nous (on l’achète)'], ['client', 'Le client']], default: 'entreprise' },
+  { name: 'produitsFourni', label: 'Colle, joint, primaire, ragréage, étanchéité fournis par', type: 'select', options: [['entreprise', 'Nous (on les achète)'], ['client', 'Le client']], default: 'entreprise', help: 'Si c’est le client : colle et joint ne sont pas comptés, ragréage, chape, étanchéité et profilés passent en pose seule.' },
   { name: 'prixCarrelageM2', label: 'Prix d’achat carrelage (€ / m²)', type: 'number', default: 25 },
   { name: 'prixSacColle', label: 'Prix d’un sac de colle 25 kg (€)', type: 'number', default: 20 },
   { name: 'prixJointKg', label: 'Prix du joint (€ / kg)', type: 'number', default: 3 },
@@ -81,6 +83,7 @@ function depuisVisite(vis, ref) {
   if (has('douche')) d.nbDouches = pieces.filter((p) => (p.travaux || []).includes('douche')).length;
   if (has('escalier')) d.nbMarches = sum('nbMarches');
   if (vis.carrelageFourni) d.carrelageFourni = vis.carrelageFourni;
+  if (vis.produitsFourni) d.produitsFourni = vis.produitsFourni;
   return d;
 }
 
@@ -193,7 +196,7 @@ export default {
         ? [['Surface et carreau', F_SURFACE], ['Situation du chantier', F_SITUATION], ['Prestations facturées', F_PRIX, fill], ['Fournitures', F_FOURNITURES], ['Temps de travail', F_TEMPS]]
         : [['Surface et carreau', F_SURFACE], ['Situation du chantier', F_SITUATION.filter((f) => f.name !== 'facturerDeplacement')], ['Temps de travail', F_TEMPS]];
       return `<div class="page-head"><div><h1>${money ? 'Chiffrage d’un chantier' : 'Calculateur de matériaux'}</h1><p>${vis ? `D’après la visite <a href="#/visite/${vis.id}" style="text-decoration:underline">${esc(vis.client || vis.titre || 'client')}</a>` : ch ? `Pour le chantier <a href="#/chantier/${ch.id}" style="text-decoration:underline">${esc(ch.nom)}</a>` : money ? 'Prix pour le client avec indicateurs du marché strasbourgeois, rentabilité et points de vigilance.' : 'Quantités de carrelage, colle et joint, et temps de travail.'}</p></div>
-        <div class="actions"><button class="btn" id="reset" type="button">${icon('refresh')}<span class="lbl">Réinitialiser</span></button>${canApply ? `<button class="btn primary" id="apply">${icon('check')}${ch ? 'Enregistrer sur ce chantier' : 'Enregistrer sur un chantier'}</button>` : ''}</div></div>
+        <div class="actions"><button class="btn" id="reset" type="button">${icon('refresh')}<span class="lbl">Réinitialiser</span></button>${money ? `<button class="btn" id="devis" type="button">${icon('quote')}<span class="lbl">Devis PDF</span></button>` : ''}${canApply ? `<button class="btn primary" id="apply">${icon('check')}${ch ? 'Enregistrer sur ce chantier' : 'Enregistrer sur un chantier'}</button>` : ''}</div></div>
         <div class="grid g2">
           <div class="card card-pad"><form class="form" id="cf">${groups.map(([t, fs, extra]) => titre(t, extra) + fs.map((f) => fieldHtml(f, data)).join('')).join('')}</form></div>
           <div class="card card-pad stack calc-sticky" id="res"></div>
@@ -226,6 +229,7 @@ export default {
           const p = a.prix[name];
           if (!p) continue;
           if (name === 'prixCarrelageM2' && v.carrelageFourni === 'client') { el.textContent = 'Fourni par le client.'; continue; }
+          if ((name === 'prixSacColle' || name === 'prixJointKg') && v.produitsFourni === 'client') { el.textContent = 'Fourni par le client.'; continue; }
           el.innerHTML = hintHtml(p, a);
           el.classList.toggle('dim', !p.utile);
         }
@@ -268,6 +272,15 @@ export default {
         toast('Chiffrage enregistré sur le chantier.');
         app.go(`#/chantier/${id}`);
       };
+      qs('#devis', root)?.addEventListener('click', () => {
+        if (!r?.totalHT) { toast('Renseignez les surfaces et les prix avant de faire le devis.'); return; }
+        const vis = query.visite ? store.get(query.visite) : null;
+        const ch = query.chantier ? store.get(query.chantier) : null;
+        const cl = ch?.clientId ? store.get(ch.clientId) : vis?.clientId ? store.get(vis.clientId) : null;
+        const client = cl || (vis ? { nom: vis.client, tel: vis.tel, email: vis.email, adresse: vis.adresse, cp: vis.cp, ville: vis.ville } : ch ? { adresse: ch.adresse, cp: ch.cp, ville: ch.ville } : {});
+        if (ch && !client.adresse) Object.assign(client, { adresse: ch.adresse, cp: ch.cp, ville: ch.ville });
+        devisModal(v, r, { client, chantier: ch });
+      });
       qs('#apply', root)?.addEventListener('click', () => {
         if (query.chantier) return apply(query.chantier).catch(toastError);
         const list = store.all('chantier').filter((c) => c.statut !== 'annule').sort((a, b) => a.nom.localeCompare(b.nom));

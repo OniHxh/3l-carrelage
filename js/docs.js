@@ -2,7 +2,7 @@
 import { esc, fmtDate, number } from './core.js';
 import * as store from './store.js';
 
-function companyBlock(s) {
+export function companyBlock(s) {
   const e = s.entreprise || {};
   return `<div class="pd-company">
     <b style="font-size:11pt;color:#171717">${esc(e.raisonSociale || '3L Carrelage')}</b>${e.formeJuridique ? ` — ${esc(e.formeJuridique)}` : ''}<br>
@@ -35,6 +35,8 @@ export function printChantierReport(c, extra) {
     ${extra || ''}`;
   print(html, `Rapport ${c.nom}`);
 }
+
+export function printDoc(html, title) { print(html, title); }
 
 function print(html, title) {
   document.querySelector('.print-doc')?.remove();
