@@ -101,6 +101,7 @@ export const STATUTS = {
     prospect: ['Prospect', ''], planifie: ['Planifié', 'blue'], en_cours: ['En cours', 'dark'], en_pause: ['En pause', 'amber'],
     termine: ['Terminé', 'green'], annule: ['Annulé', ''],
   },
+  visite: { a_chiffrer: ['À chiffrer', 'amber'], devis_envoye: ['Devis envoyé', 'blue'], accepte: ['Accepté', 'green'], refuse: ['Refusé', ''] },
   devis: { envoye: ['En attente', 'blue'], accepte: ['Accepté', 'green'], refuse: ['Refusé', 'red'] },
   tache: { a_faire: ['À faire', ''], en_cours: ['En cours', 'blue'], fait: ['Fait', 'green'] },
   risque: { eleve: ['Risque élevé', 'red'], moyen: ['À surveiller', 'amber'], faible: ['Sous contrôle', 'green'], aucun: ['', ''] },

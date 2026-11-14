@@ -404,6 +404,15 @@ input[type="checkbox"] { accent-color: var(--red); width: 18px; height: 18px; }
 .calc-result .hero-tile b, .calc-result .hero-tile span { color: var(--surface); }
 .calc-result .pos-tile b { color: var(--green); }
 .calc-result .neg-tile b { color: var(--red-ink); }
+/* Visites clients */
+.travaux-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 14px; padding-top: 4px; }
+.travaux-grid .check { font-size: 14px; }
+.visite-piece { display: flex; flex-direction: column; gap: 14px; }
+.visite-mini { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); }
+.visite-photo-row { display: flex; gap: 12px; align-items: flex-start; }
+@media (max-width: 860px) { .visite-piece .form { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } }
+.visite-photo-row img { width: 96px; height: 96px; object-fit: cover; border-radius: 10px; flex: none; }
+
 /* Aide au chiffrage */
 .form > *, .grid > * { min-width: 0; }
 .form select.input { width: 100%; min-width: 0; max-width: 100%; text-overflow: ellipsis; }

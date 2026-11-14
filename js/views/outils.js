@@ -1,7 +1,7 @@
 import { esc, icon, number, qs, qsa } from '../core.js';
 import * as store from '../store.js';
 import { app } from '../app.js';
-import { fieldHtml, readForm, modal, toast, toastError } from '../ui.js';
+import { fieldHtml, readForm, modal, toast, toastError, confirmDialog } from '../ui.js';
 import { chiffrageChantier, aideChiffrage, referencePrix, SITUATIONS, NIVEAUX } from '../../shared/calc.js';
 
 const eur = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(n) || 0);
@@ -34,11 +34,11 @@ const F_PRIX = [
   { name: 'prixPoseM2', label: 'Pose sol (€ HT / m²)', type: 'number', default: 40 },
   { name: 'prixFaienceM2', label: 'Pose faïence (€ HT / m²)', type: 'number' },
   { name: 'prixDeposeM2', label: 'Dépose ancien carrelage (€ / m²)', type: 'number', default: 0, help: '0 si pas de dépose.' },
-  { name: 'prixRagreageM2', label: 'Ragréage / préparation (€ / m²)', type: 'number', default: 0 },
-  { name: 'surfaceChape', label: 'Chape (m²)', type: 'number', default: 0 }, { name: 'prixChapeM2', label: 'Chape (€ / m²)', type: 'number' },
-  { name: 'surfaceEtancheite', label: 'Étanchéité SPEC / SEL (m²)', type: 'number', default: 0, help: 'Zone de douche, murs et sol exposés.' }, { name: 'prixEtancheiteM2', label: 'Étanchéité (€ / m²)', type: 'number' },
+  { name: 'prixRagreageM2', label: 'Ragréage fourni-posé (€ / m²)', type: 'number', default: 0, help: '0 si pas de ragréage. Primaire et produit compris.' },
+  { name: 'surfaceChape', label: 'Chape (m²)', type: 'number', default: 0 }, { name: 'prixChapeM2', label: 'Chape fourni-posé (€ / m²)', type: 'number' },
+  { name: 'surfaceEtancheite', label: 'Étanchéité SPEC / SEL (m²)', type: 'number', default: 0, help: 'Zone de douche, murs et sol exposés.' }, { name: 'prixEtancheiteM2', label: 'Étanchéité fourni-posé (€ / m²)', type: 'number' },
   { name: 'plinthesMl', label: 'Plinthes (mètres linéaires)', type: 'number', default: 0 }, { name: 'prixPlintheMl', label: 'Pose plinthes (€ / ml)', type: 'number', default: 12 },
-  { name: 'profilesMl', label: 'Profilés, seuils, nez de marche (ml)', type: 'number', default: 0 }, { name: 'prixProfileMl', label: 'Profilés (€ / ml)', type: 'number' },
+  { name: 'profilesMl', label: 'Profilés, seuils, nez de marche (ml)', type: 'number', default: 0 }, { name: 'prixProfileMl', label: 'Profilés fourni-posé (€ / ml)', type: 'number' },
   { name: 'nbMarches', label: 'Marches d’escalier (nombre)', type: 'number', default: 0 }, { name: 'prixMarche', label: 'Prix par marche (€)', type: 'number' },
   { name: 'nbDouches', label: 'Douches à l’italienne (nombre)', type: 'number', default: 0 }, { name: 'forfaitDouche', label: 'Forfait douche (€, hors carrelage)', type: 'number' },
   { name: 'evacuationHT', label: 'Évacuation des gravats (€ forfait)', type: 'number', default: 0 },
@@ -55,12 +55,34 @@ const F_FOURNITURES = [
 ];
 // Temps
 const F_TEMPS = [
-  { name: 'm2ParJour', label: 'm² faits par jour et par personne', type: 'number', default: 10, help: 'Tout compris (préparation, pose, joints).' },
+  { name: 'm2ParJour', label: 'm² de sol posés par jour et par personne', type: 'number', default: 12, help: 'Tout compris (encollage, pose, coupes, joints). La faïence compte à 70 % de ce rendement ; dépose, ragréage, plinthes… sont ajoutés automatiquement.' },
   { name: 'personnes', label: 'Nombre de personnes sur le chantier', type: 'number', default: 1 },
   { name: 'heuresParJour', label: 'Heures par jour', type: 'number', default: 8 },
 ];
 const ALL = [...F_SURFACE, ...F_SITUATION, ...F_PRIX, ...F_FOURNITURES, ...F_TEMPS];
 const MEM = 'calc-chiffrage';
+
+/** Pré-remplit le calculateur à partir d'une visite client (somme des pièces). */
+function depuisVisite(vis, ref) {
+  const mid = (k) => Math.round((ref.prestations[k].min + ref.prestations[k].max) / 2);
+  const pieces = vis.pieces || [];
+  const val = (p, k) => (k === 'surfaceSol' ? (Number(p.surfaceSol) || (Number(p.longueur) || 0) * (Number(p.largeur) || 0)) : Number(p[k]) || 0);
+  const sum = (k) => Math.round(pieces.reduce((s, p) => s + val(p, k), 0) * 100) / 100;
+  const has = (t) => pieces.some((p) => (p.travaux || []).includes(t));
+  const d = { surface: sum('surfaceSol') || null, surfaceMur: sum('surfaceMur') || 0, plinthesMl: sum('plinthesMl') || 0 };
+  if (vis.formatL) d.formatL = vis.formatL;
+  if (vis.formatH) d.formatH = vis.formatH;
+  for (const k of ['typePose', 'support', 'piece', 'acces', 'occupe', 'materiau', 'difficulte', 'chauffageSol']) if (vis[k]) d[k] = vis[k];
+  if (vis.distanceKm) d.distanceKm = vis.distanceKm;
+  if (has('depose')) d.prixDeposeM2 = mid('depose');
+  if (has('ragreage')) d.prixRagreageM2 = mid('ragreage');
+  if (has('etancheite')) d.surfaceEtancheite = sum('surfaceEtancheite');
+  if (has('evacuation') || has('depose')) d.evacuationHT = mid('evacuation');
+  if (has('douche')) d.nbDouches = pieces.filter((p) => (p.travaux || []).includes('douche')).length;
+  if (has('escalier')) d.nbMarches = sum('nbMarches');
+  if (vis.carrelageFourni) d.carrelageFourni = vis.carrelageFourni;
+  return d;
+}
 
 const loadMem = () => { try { return JSON.parse(localStorage.getItem(MEM) || '{}'); } catch { return {}; } };
 const saveMem = (v) => { try { localStorage.setItem(MEM, JSON.stringify(v)); } catch {} };
@@ -100,7 +122,7 @@ function alertesHtml(alertes) {
 
 function majorationsHtml(a) {
   if (!a.majorations.length) return '<p class="small muted" style="margin:0">Situation standard : aucune majoration sur la pose.</p>';
-  return `<div class="card calc-maj"><div class="li"><div class="grow t">Majoration de la pose selon la situation</div><b class="num">${a.majPct > 0 ? '+' : ''}${a.majPct} %</b></div>
+  return `<div class="card calc-maj"><div class="li"><div class="grow t">Majoration de la pose selon la situation</div><b class="num">${a.majPct > 0 ? '+' : ''}${a.majPct} %${a.majPctBrut !== a.majPct ? ` <span class="tiny muted">(plafonné, ${a.majPctBrut > 0 ? '+' : ''}${a.majPctBrut} % cumulés)</span>` : ''}</b></div>
     ${a.majorations.map((m) => `<div class="li"><div class="grow s">${esc(m.label)}</div><span class="num small">${m.pct > 0 ? '+' : ''}${m.pct} %</span></div>`).join('')}</div>`;
 }
 
@@ -108,6 +130,7 @@ function resultHtml(r, a, money, canSettings) {
   const temps = `<h3 style="margin:0">Temps estimé</h3><div class="calc-result">
       ${tile(`${number(r.heures)} h`, 'Heures de travail au total')}
       ${tile(`${number(r.joursChantier)} j`, `Durée du chantier (${number(r.joursPersonne)} jour(s)-personne)`)}
+      ${r.heuresAnnexes ? tile(`${number(r.heuresAnnexes)} h`, 'dont dépose, préparation, plinthes, marches, douche…') : ''}
     </div>`;
   const mat = `<h3 style="margin:0">Matériaux</h3><div class="calc-result">
       ${tile(`${number(r.surfaceCommande)} m²`, `À commander (surface ${number(r.surface)} m²)`)}
@@ -135,7 +158,8 @@ function resultHtml(r, a, money, canSettings) {
       ${tile(eur(rt.benefice), `Bénéfice (${number(rt.beneficePct)} % du HT)`, rt.benefice >= 0 ? 'pos-tile' : 'neg-tile')}
       ${tile(rt.tauxHoraireEffectif != null ? eur(rt.tauxHoraireEffectif) : '—', 'Rapporté par heure de travail (hors fournitures)')}
       ${tile(eur(rt.coutMO), `Coût main-d’œuvre (${number(r.heures)} h)`)}
-      ${tile(eur(r.fournituresAchat), 'Fournitures (achat)')}
+      ${tile(eur(r.fournituresAchat + r.materiauxPrestations), r.materiauxPrestations ? `Fournitures (achat), dont ${eur(r.materiauxPrestations)} pour les prestations fourni-posé` : 'Fournitures (achat)')}
+      ${tile(eur(rt.prixTempsPasse), 'Prix si facturé au temps passé (contrôle)')}
       ${tile(eur(rt.fraisGeneraux), 'Frais généraux')}
       ${r.deplacementCout ? tile(eur(r.deplacementCout), `Déplacements (${r.joursTrajet} aller-retour)`) : ''}
     </div>
@@ -161,14 +185,15 @@ export default {
     render({ query }) {
       const money = app.can('ca', 1);
       const ch = query.chantier ? store.get(query.chantier) : null;
-      const data = ch?.chiffrage ? { ...ch.chiffrage } : { ...loadMem(), ...(ch?.surface ? { surface: ch.surface } : {}) };
+      const vis = query.visite ? store.get(query.visite) : null;
+      const data = ch?.chiffrage ? { ...ch.chiffrage } : vis ? depuisVisite(vis, referencePrix(store.settings().prixRef)) : { ...loadMem(), ...(ch?.surface ? { surface: ch.surface } : {}) };
       const canApply = money && app.can('ca', 2) && app.can('chantiers', 2);
       const fill = `<button type="button" class="btn sm" id="fill">${icon('sparkles')}Remplir les prix conseillés</button>`;
       const groups = money
         ? [['Surface et carreau', F_SURFACE], ['Situation du chantier', F_SITUATION], ['Prestations facturées', F_PRIX, fill], ['Fournitures', F_FOURNITURES], ['Temps de travail', F_TEMPS]]
         : [['Surface et carreau', F_SURFACE], ['Situation du chantier', F_SITUATION.filter((f) => f.name !== 'facturerDeplacement')], ['Temps de travail', F_TEMPS]];
-      return `<div class="page-head"><div><h1>${money ? 'Chiffrage d’un chantier' : 'Calculateur de matériaux'}</h1><p>${ch ? `Pour le chantier <a href="#/chantier/${ch.id}" style="text-decoration:underline">${esc(ch.nom)}</a>` : money ? 'Prix pour le client avec indicateurs du marché strasbourgeois, rentabilité et points de vigilance.' : 'Quantités de carrelage, colle et joint, et temps de travail.'}</p></div>
-        <div class="actions">${canApply ? `<button class="btn primary" id="apply">${icon('check')}${ch ? 'Enregistrer sur ce chantier' : 'Enregistrer sur un chantier'}</button>` : ''}</div></div>
+      return `<div class="page-head"><div><h1>${money ? 'Chiffrage d’un chantier' : 'Calculateur de matériaux'}</h1><p>${vis ? `D’après la visite <a href="#/visite/${vis.id}" style="text-decoration:underline">${esc(vis.client || vis.titre || 'client')}</a>` : ch ? `Pour le chantier <a href="#/chantier/${ch.id}" style="text-decoration:underline">${esc(ch.nom)}</a>` : money ? 'Prix pour le client avec indicateurs du marché strasbourgeois, rentabilité et points de vigilance.' : 'Quantités de carrelage, colle et joint, et temps de travail.'}</p></div>
+        <div class="actions"><button class="btn" id="reset" type="button">${icon('refresh')}<span class="lbl">Réinitialiser</span></button>${canApply ? `<button class="btn primary" id="apply">${icon('check')}${ch ? 'Enregistrer sur ce chantier' : 'Enregistrer sur un chantier'}</button>` : ''}</div></div>
         <div class="grid g2">
           <div class="card card-pad"><form class="form" id="cf">${groups.map(([t, fs, extra]) => titre(t, extra) + fs.map((f) => fieldHtml(f, data)).join('')).join('')}</form></div>
           <div class="card card-pad stack calc-sticky" id="res"></div>
@@ -204,9 +229,10 @@ export default {
           el.innerHTML = hintHtml(p, a);
           el.classList.toggle('dim', !p.utile);
         }
-        if (!query.chantier) saveMem(v);
+        if (!query.chantier && !query.visite) saveMem(v);
       };
       f.addEventListener('input', run); f.addEventListener('change', run); run();
+      if (query.visite && money) setTimeout(() => qs('#fill', root)?.click());
 
       f.addEventListener('click', (e) => {
         const b = e.target.closest('[data-use]');
@@ -216,6 +242,13 @@ export default {
         if (!el) return;
         el.value = b.dataset.val;
         run();
+      });
+      qs('#reset', root).addEventListener('click', async () => {
+        if (!(await confirmDialog('Remettre tous les champs du calculateur à leurs valeurs par défaut ?', { ok: 'Réinitialiser' }))) return;
+        for (const fd of ALL) { const el = f.elements[fd.name]; if (el) el.value = fd.default ?? ''; }
+        saveMem({});
+        run();
+        toast(query.chantier ? 'Champs réinitialisés. Le chiffrage du chantier ne change que si vous enregistrez.' : 'Calculateur réinitialisé.');
       });
       qs('#fill', root)?.addEventListener('click', () => {
         let n = 0;

@@ -82,8 +82,20 @@ export function chiffrageChantier(v = {}, ref = REFERENCE) {
   const rendement = num(v.m2ParJour);              // m² réalisés par jour et par personne
   const personnes = Math.max(1, num(v.personnes) || 1);
   const heuresJour = num(v.heuresParJour) || 8;
-  const heuresAnnexes = num(v.nbMarches) * 1.5 + num(v.nbDouches) * 12; // marches, receveurs à carreler
-  const joursPersonne = round2((rendement > 0 ? mat.surface / rendement : 0) + heuresAnnexes / heuresJour);
+  // Temps et matériaux des autres prestations (dépose, ragréage, chape, étanchéité, plinthes, marches, douche…)
+  let heuresAnnexes = 0, materiauxPrestations = 0;
+  for (const p of Object.values(ref.prestations)) {
+    if (!p.heures && !p.cout && !p.coutPct) continue;
+    const qte = p.qte === null ? 1 : num(p.qte === 'surfaceSol' ? surfaceSol : v[p.qte]);
+    const prix = num(v[p.field]);
+    if (!qte || (p.optionnel && !prix)) continue; // prestation optionnelle non facturée = non réalisée
+    heuresAnnexes += qte * num(p.heures);
+    materiauxPrestations += qte * num(p.cout) + (p.coutPct ? qte * prix * p.coutPct / 100 : 0);
+  }
+  heuresAnnexes = round2(heuresAnnexes); materiauxPrestations = round2(materiauxPrestations);
+  // La faïence se pose plus lentement que le sol (≈ 70 % du rendement)
+  const joursPose = rendement > 0 ? surfaceSol / rendement + surfaceMur / (rendement * FACTEUR_FAIENCE) : 0;
+  const joursPersonne = round2(joursPose + heuresAnnexes / heuresJour);
   const heures = round2(joursPersonne * heuresJour);
   const joursChantier = round2(joursPersonne / personnes);
   // Main-d'œuvre facturée
@@ -117,7 +129,7 @@ export function chiffrageChantier(v = {}, ref = REFERENCE) {
   return {
     ...mat, surfaceSol, surfaceMur,
     pose, faience, depose, ragreage, chape, etancheite, plinthes, profiles, marches, douches, evacuation, deplacement, deplacementCout,
-    mainOeuvreHT, carrelageAchat, colleAchat, jointAchat, fournituresAchat, fournituresVente,
+    mainOeuvreHT, heuresAnnexes, materiauxPrestations, carrelageAchat, colleAchat, jointAchat, fournituresAchat, fournituresVente,
     totalHT, tvaPct, totalTVA, totalTTC: round2(totalHT + totalTVA),
     joursPersonne, heures, joursChantier, joursTrajet,
   };
@@ -127,18 +139,20 @@ export function chiffrageChantier(v = {}, ref = REFERENCE) {
 // Fourchettes HT courantes à Strasbourg / Bas-Rhin (2026), pose seule, fournitures non comprises,
 // pour une situation « standard » (carreaux 30 à 60 cm, pose droite, support sain, accès facile).
 // Modifiables dans Paramètres → Prix de référence.
+export const FACTEUR_FAIENCE = 0.7;
+// heures = temps par unité (h), cout = matériaux inclus dans le prix « fourni-posé » (€ par unité, coût pour vous)
 export const PRESTATIONS = [
-  { key: 'pose', field: 'prixPoseM2', qte: 'surfaceSol', label: 'Pose carrelage sol', unite: 'm²', min: 35, max: 55, majore: true },
-  { key: 'faience', field: 'prixFaienceM2', qte: 'surfaceMur', label: 'Pose faïence murale', unite: 'm²', min: 40, max: 65, majore: true },
-  { key: 'depose', field: 'prixDeposeM2', qte: 'surfaceSol', label: 'Dépose ancien carrelage', unite: 'm²', min: 15, max: 30, optionnel: true },
-  { key: 'ragreage', field: 'prixRagreageM2', qte: 'surfaceSol', label: 'Ragréage / préparation du support', unite: 'm²', min: 15, max: 30, optionnel: true },
-  { key: 'chape', field: 'prixChapeM2', qte: 'surfaceChape', label: 'Chape', unite: 'm²', min: 25, max: 45 },
-  { key: 'etancheite', field: 'prixEtancheiteM2', qte: 'surfaceEtancheite', label: 'Étanchéité sous carrelage (SPEC / SEL)', unite: 'm²', min: 25, max: 45 },
-  { key: 'plinthe', field: 'prixPlintheMl', qte: 'plinthesMl', label: 'Pose plinthes', unite: 'ml', min: 10, max: 18 },
-  { key: 'profile', field: 'prixProfileMl', qte: 'profilesMl', label: 'Profilés, nez de marche, baguettes', unite: 'ml', min: 12, max: 25 },
-  { key: 'marche', field: 'prixMarche', qte: 'nbMarches', label: 'Marche d’escalier (pose)', unite: 'marche', min: 70, max: 130, majore: true },
-  { key: 'douche', field: 'forfaitDouche', qte: 'nbDouches', label: 'Douche à l’italienne (forme de pente, siphon, hors carrelage)', unite: 'forfait', min: 900, max: 1800 },
-  { key: 'evacuation', field: 'evacuationHT', qte: null, label: 'Évacuation des gravats (benne, déchetterie)', unite: 'forfait', min: 100, max: 350, optionnel: true },
+  { key: 'pose', field: 'prixPoseM2', qte: 'surfaceSol', label: 'Pose carrelage sol', unite: 'm²', min: 30, max: 50, majore: true },
+  { key: 'faience', field: 'prixFaienceM2', qte: 'surfaceMur', label: 'Pose faïence murale', unite: 'm²', min: 35, max: 55, majore: true },
+  { key: 'depose', field: 'prixDeposeM2', qte: 'surfaceSol', label: 'Dépose ancien carrelage', unite: 'm²', min: 15, max: 30, optionnel: true, heures: 0.35, cout: 0 },
+  { key: 'ragreage', field: 'prixRagreageM2', qte: 'surfaceSol', label: 'Ragréage fourni-posé (primaire compris)', unite: 'm²', min: 15, max: 28, optionnel: true, heures: 0.12, cout: 6 },
+  { key: 'chape', field: 'prixChapeM2', qte: 'surfaceChape', label: 'Chape fourni-posé', unite: 'm²', min: 25, max: 45, heures: 0.3, cout: 10 },
+  { key: 'etancheite', field: 'prixEtancheiteM2', qte: 'surfaceEtancheite', label: 'Étanchéité SPEC / SEL fourni-posé', unite: 'm²', min: 30, max: 50, heures: 0.3, cout: 18 },
+  { key: 'plinthe', field: 'prixPlintheMl', qte: 'plinthesMl', label: 'Pose plinthes', unite: 'ml', min: 10, max: 18, heures: 0.2, cout: 0 },
+  { key: 'profile', field: 'prixProfileMl', qte: 'profilesMl', label: 'Profilés, seuils, nez de marche fourni-posé', unite: 'ml', min: 15, max: 30, heures: 0.15, cout: 9 },
+  { key: 'marche', field: 'prixMarche', qte: 'nbMarches', label: 'Marche d’escalier (pose)', unite: 'marche', min: 60, max: 110, majore: true, heures: 1.5, cout: 0 },
+  { key: 'douche', field: 'forfaitDouche', qte: 'nbDouches', label: 'Douche à l’italienne (forme de pente, siphon, hors carrelage)', unite: 'forfait', min: 900, max: 1800, heures: 12, cout: 250 },
+  { key: 'evacuation', field: 'evacuationHT', qte: null, label: 'Évacuation des gravats (benne, déchetterie)', unite: 'forfait', min: 100, max: 350, optionnel: true, coutPct: 60 },
 ];
 // Prix d'achat courants des fournitures (négoce, prix artisan HT)
 export const FOURNITURES = [
@@ -156,14 +170,14 @@ export const GESTION = [
   { key: 'prixKm', label: 'Coût par km (€)', value: 0.6 },
   { key: 'kmInclus', label: 'Km inclus sans frais (zone Strasbourg)', value: 15, help: 'Distance aller sous laquelle le déplacement n’est pas facturé.' },
   { key: 'minimumHT', label: 'Minimum de facturation par chantier (€ HT)', value: 400 },
-  { key: 'rendementBase', label: 'Rendement de base (m² / jour / personne)', value: 10, help: 'Situation standard, tout compris (préparation, pose, joints).' },
+  { key: 'rendementBase', label: 'Rendement de base au sol (m² / jour / personne)', value: 12, help: 'Situation standard, tout compris (encollage, pose, coupes, joints). La faïence compte à 70 %.' },
 ];
 
 /** Majorations selon la situation du chantier (en % sur la pose). [valeur, libellé, %] */
 export const SITUATIONS = {
   difficulte: { label: 'Difficulté générale', options: [['normale', 'Normale', 0], ['simple', 'Simple (grandes surfaces dégagées, peu de coupes)', -5], ['difficile', 'Difficile (nombreuses coupes, angles, niches)', 15], ['tres_difficile', 'Très difficile (travail de précision, pièce biscornue)', 30]] },
   materiau: { label: 'Matériau', options: [['gres', 'Grès cérame / céramique', 0], ['pierre', 'Pierre naturelle (marbre, travertin, ardoise)', 25], ['zellige', 'Zellige / terre cuite / carreaux artisanaux', 30], ['verre', 'Mosaïque de verre', 20], ['ciment', 'Carreaux de ciment', 20]] },
-  typePose: { label: 'Type de pose', options: [['droite', 'Droite / alignée', 0], ['decalee', 'Décalée (1/2, 1/3)', 5], ['diagonale', 'Diagonale', 15], ['opus', 'Opus / multi-formats', 20], ['chevron', 'Chevron / bâton rompu', 40]] },
+  typePose: { label: 'Type de pose', options: [['droite', 'Droite / alignée', 0], ['decalee', 'Décalée (1/2, 1/3)', 5], ['diagonale', 'Diagonale', 25], ['opus', 'Opus / multi-formats', 20], ['chevron', 'Chevron / bâton rompu', 50]] },
   support: { label: 'État du support', options: [['bon', 'Bon : plan, sain, propre', 0], ['existant', 'Pose sur ancien carrelage', 5], ['reprendre', 'À reprendre (fissures, faux niveau)', 10], ['bois', 'Plancher bois', 15]] },
   piece: { label: 'Type de pièce', options: [['ouverte', 'Grande pièce ouverte, peu de découpes', 0], ['standard', 'Pièce standard', 5], ['sdb', 'Salle de bain / WC (beaucoup de découpes)', 15], ['exterieur', 'Extérieur / terrasse', 15]] },
   acces: { label: 'Accès au chantier', options: [['facile', 'Plain-pied ou ascenseur', 0], ['etage', 'Étage sans ascenseur', 8], ['centre', 'Centre de Strasbourg (stationnement, livraison)', 8], ['difficile', 'Accès très difficile', 15]] },
@@ -182,7 +196,8 @@ export function referencePrix(custom = {}) {
     const c = src[p.key] || {};
     const min = c.min != null && c.min !== '' ? num(c.min) : p.min;
     const max = c.max != null && c.max !== '' ? num(c.max) : p.max;
-    return [p.key, { ...p, min: Math.min(min, max), max: Math.max(min, max) }];
+    const opt = (k) => (c[k] != null && c[k] !== '' ? num(c[k]) : p[k]);
+    return [p.key, { ...p, min: Math.min(min, max), max: Math.max(min, max), heures: opt('heures'), cout: opt('cout') }];
   }));
   const gestion = Object.fromEntries(GESTION.map((p) => {
     const c = custom.gestion?.[p.key];
@@ -232,6 +247,7 @@ export const NIVEAUX = {
 
 /** Nombre au format français (virgule, espaces). */
 export const fr = (n) => (Number(n) || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+export const MAJ_MAX = 100, MAJ_MIN = -10;
 const arrondi = (n) => (n >= 200 ? Math.round(n / 10) * 10 : n >= 20 ? Math.round(n) : Math.round(n * 2) / 2);
 
 /**
@@ -250,7 +266,8 @@ export function aideChiffrage(v = {}, r = chiffrageChantier(v), ref = REFERENCE)
     const o = s.options.find((x) => x[0] === v[k]);
     if (o && o[2]) majorations.push({ label: `${s.label} : ${o[1]}`, pct: o[2] });
   }
-  const majPct = majorations.reduce((s, m) => s + m.pct, 0);
+  const majPctBrut = majorations.reduce((s, m) => s + m.pct, 0);
+  const majPct = Math.max(MAJ_MIN, Math.min(MAJ_MAX, majPctBrut)); // les difficultés se recoupent : plafond réaliste
   const coef = 1 + majPct / 100;
 
   // 2. Fourchettes par prestation
@@ -269,16 +286,18 @@ export function aideChiffrage(v = {}, r = chiffrageChantier(v), ref = REFERENCE)
 
   // 4. Rentabilité
   const coutMO = round2(r.heures * num(g.coutHoraire));
-  const coutsDirects = round2(r.fournituresAchat + coutMO + r.deplacementCout);
+  const coutsDirects = round2(r.fournituresAchat + r.materiauxPrestations + coutMO + r.deplacementCout);
   const fg = num(g.fraisGenerauxPct) / 100, mc = num(g.margeCiblePct) / 100;
   const fraisGeneraux = round2(r.totalHT * fg);
   const benefice = round2(r.totalHT - coutsDirects - fraisGeneraux);
   const beneficePct = r.totalHT > 0 ? round2((benefice / r.totalHT) * 100) : 0;
   const prixPlancher = fg < 1 ? round2(coutsDirects / (1 - fg)) : null;
   const prixConseille = fg + mc < 1 ? round2(coutsDirects / (1 - fg - mc)) : null;
-  const tauxHoraireEffectif = r.heures > 0 ? round2((r.totalHT - r.fournituresAchat - r.deplacement) / r.heures) : null;
+  const tauxHoraireEffectif = r.heures > 0 ? round2((r.totalHT - r.fournituresAchat - r.materiauxPrestations - r.deplacement) / r.heures) : null;
   const prixM2 = r.surfaceSol + r.surfaceMur > 0 ? round2(r.totalHT / (r.surfaceSol + r.surfaceMur)) : null;
-  const rentab = { coutMO, coutsDirects, fraisGeneraux, benefice, beneficePct, prixPlancher, prixConseille, tauxHoraireEffectif, prixM2, minimumHT: num(g.minimumHT) };
+  // Contrôle : prix si l'on facturait au temps passé, au taux horaire visé
+  const prixTempsPasse = round2(r.heures * num(g.tauxHoraireCible) + (r.fournituresAchat + r.materiauxPrestations) * (1 + num(v.margeFournituresPct) / 100) + r.deplacement);
+  const rentab = { prixTempsPasse, coutMO, coutsDirects, fraisGeneraux, benefice, beneficePct, prixPlancher, prixConseille, tauxHoraireEffectif, prixM2, minimumHT: num(g.minimumHT) };
 
   // 5. Verdict global
   let verdict = 'vide';
@@ -338,6 +357,10 @@ export function aideChiffrage(v = {}, r = chiffrageChantier(v), ref = REFERENCE)
   if (v.acces === 'centre') add('info', 'Centre de Strasbourg : prévoir le stationnement (zone payante, demande d’occupation du domaine public pour une benne) dans les autres frais.');
   if (num(v.distanceKm) > num(g.kmInclus) && v.facturerDeplacement === 'non') add('info', `Chantier à ${fr(num(v.distanceKm))} km : le déplacement n’est pas facturé (coût ≈ ${fr(r.deplacementCout)} €).`);
 
+  if (majPctBrut > MAJ_MAX) add('warn', `Situation très chargée : les majorations cumulées (+${fr(majPctBrut)} %) sont plafonnées à +${MAJ_MAX} %. Chiffrez plutôt au temps passé et faites une visite technique.`);
+  else if (majPctBrut >= 60) add('info', `Majorations cumulées importantes (+${fr(majPctBrut)} %) : comparez avec le prix au temps passé (${fr(prixTempsPasse)} € HT).`);
+  if (r.totalHT > 0 && prixTempsPasse > 0 && r.totalHT < prixTempsPasse * 0.8) add('warn', `Votre prix (${fr(r.totalHT)} €) est bien en dessous du prix au temps passé (${fr(prixTempsPasse)} € HT à ${fr(num(g.tauxHoraireCible))} €/h) : le temps estimé ne serait pas payé.`);
+
   // TVA
   if (num(v.tva) === 5.5) add('warn', 'TVA 5,5 % : réservée aux travaux de rénovation énergétique. Pour du carrelage seul, c’est 10 % (logement de plus de 2 ans) ou 20 %.');
   if (num(v.tva) === 10 || v.tva == null || v.tva === '') add('info', 'TVA 10 % : seulement pour un logement de plus de 2 ans. Faites confirmer par écrit au client (mention sur le devis ou attestation).');
@@ -353,7 +376,7 @@ export function aideChiffrage(v = {}, r = chiffrageChantier(v), ref = REFERENCE)
   const ordre = { danger: 0, warn: 1, info: 2 };
   alertes.sort((a, b) => ordre[a.niveau] - ordre[b.niveau]);
 
-  return { majorations, majPct, coef, prix, rendementConseille, rentab, verdict, alertes };
+  return { majorations, majPct, majPctBrut, coef, prix, rendementConseille, rentab, verdict, alertes };
 }
 
 /** Temps passé sur un chantier : heures pointées, heures prévues, estimation de fin. */

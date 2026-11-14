@@ -25,6 +25,12 @@ Remplace l'ancienne version serveur (Node.js + SQLite sur le MacBook, publiée v
 - Plus de comptes ni de mot de passe : une seule personne (administrateur, `meta.owner`). Les anciens comptes restent dans `meta.users` pour l'affichage des noms. Membres sans compte = type `membre`.
 - Premier lancement (base vide) : `js/views/accueil.js` → récupérer via la synchro, importer un fichier, ou démarrer à vide.
 
+## Chiffrage et visites
+
+- `shared/calc.js` : `chiffrageChantier` (prix, temps de toutes les tâches, matériaux fourni-posé), `aideChiffrage` (fourchettes ajustées, majorations plafonnées à +100 %, rentabilité, prix au temps passé, alertes), `referencePrix` (valeurs par défaut fusionnées avec `parametres.prixRef`). Tests dans `~/3L-Carrelage-ERP/test/calc.test.js` (copier `calc.js` là-bas puis `npm test`).
+- `js/views/outils.js` : calculateur (indicateurs sous les prix, « Remplir les prix conseillés », « Réinitialiser », pré-remplissage depuis une visite `#/outils?visite=<id>`).
+- `js/views/visites.js` : type `visite` (client, pièces avec mesures et travaux, situation, notes) ; photos = type `photo` avec `visiteId` (+ `pieceId`). « Créer le chantier » crée client + chantier prospect + note et rattache les photos (`chantierId`).
+
 ## Synchronisation entre appareils (`js/cloud.js`)
 
 - Même modèle que Plan : Gist **privé**, chiffré PBKDF2 (250 000 itérations) + AES-GCM 256. Clé `ghp_…` limitée à `gist`, créée par l'utilisateur lui-même (la clé de Plan, même origine `onihxh.github.io`, est proposée automatiquement).

@@ -22,6 +22,7 @@ const NAV = [
     { href: '#/chantiers', label: 'Chantiers', icon: 'site', mod: 'chantiers', match: /^chantier/, badge: 'chantiers' },
     { href: '#/planning', label: 'Planning', icon: 'calendar', mod: 'planning', match: /^(planning|taches|recap)/, badge: 'taches' },
     { href: '#/clients', label: 'Clients', icon: 'users', mod: 'clients', match: /^client/ },
+    { href: '#/visites', label: 'Visites clients', icon: 'camera', mod: 'chantiers', match: /^visite/ },
   ] },
   { group: 'Entreprise', items: [
     { href: '#/outils', label: 'Calculateur', icon: 'calc', match: /^outils/ },
@@ -35,6 +36,7 @@ const ROUTES = [
   ['', 'dashboard', 'main'],
   ['chantiers', 'chantiers', 'list'], ['chantier/:id', 'chantiers', 'detail'],
   ['clients', 'clients', 'list'], ['client/:id', 'clients', 'detail'],
+  ['visites', 'visites', 'list'], ['visite/:id', 'visites', 'detail'],
   ['planning', 'planning', 'week'], ['recap', 'planning', 'recap'], ['taches', 'planning', 'taches'], ['tache/:id', 'planning', 'taches'], ['evenement/:id', 'planning', 'week'], ['pointage/:id', 'planning', 'week'],
   ['note/:id', 'chantiers', 'fromChild'], ['photo/:id', 'chantiers', 'fromChild'],
   ['equipe', 'equipe', 'list'], ['journal', 'equipe', 'journal'],
@@ -44,7 +46,7 @@ const ROUTES = [
 ];
 
 const loaders = {
-  dashboard: () => import('./views/dashboard.js'), chantiers: () => import('./views/chantiers.js'), clients: () => import('./views/clients.js'),
+  dashboard: () => import('./views/dashboard.js'), chantiers: () => import('./views/chantiers.js'), clients: () => import('./views/clients.js'), visites: () => import('./views/visites.js'),
   planning: () => import('./views/planning.js'), equipe: () => import('./views/equipe.js'),
   parametres: () => import('./views/parametres.js'), ca: () => import('./views/ca.js'), outils: () => import('./views/outils.js'), menu: async () => ({ default: { menu: menuView } }),
 };
@@ -187,6 +189,7 @@ function syncPanel() {
 
 function quickAdd() {
   const items = [
+    ['chantiers', '#/visites?nouveau=1', 'camera', 'Visite client'],
     ['chantiers', '#/chantiers?nouveau=1', 'site', 'Chantier'],
     ['chantiers', '#/chantiers?photo=1', 'camera', 'Photo chantier'],
     ['planning', '#/taches?nouveau=1', 'tasks', 'Tâche'],

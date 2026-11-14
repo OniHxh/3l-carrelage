@@ -79,7 +79,7 @@ const LABELS = {
   chantier: (d) => d.nom || d.ref, client: (d) => d.nom, tache: (d) => d.titre,
   evenement: (d) => d.titre, pointage: (d) => `${num(d.heures)} h le ${d.date}`, photo: (d) => d.legende || 'Photo',
   note: (d) => (d.texte || '').slice(0, 60), parametres: () => 'Paramètres',
-  devis: (d) => `Devis ${d.numero || d.nomFichier || ''}`.trim(), membre: (d) => d.name,
+  devis: (d) => `Devis ${d.numero || d.nomFichier || ''}`.trim(), membre: (d) => d.name, visite: (d) => `Visite ${d.client || ''}`.trim(),
 };
 const labelOf = (type, d) => (LABELS[type] ? LABELS[type](d) : type) || type;
 

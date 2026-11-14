@@ -12,7 +12,7 @@ export const MODULES = {
 
 /** Type d'enregistrement → module qui le gouverne. */
 export const TYPE_MODULE = {
-  chantier: 'chantiers', photo: 'chantiers', note: 'chantiers',
+  chantier: 'chantiers', photo: 'chantiers', note: 'chantiers', visite: 'chantiers',
   client: 'clients',
   devis: 'ca',
   tache: 'planning', evenement: 'planning', pointage: 'planning', membre: 'planning',

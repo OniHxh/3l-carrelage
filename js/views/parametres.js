@@ -14,11 +14,14 @@ const ENT_FIELDS = [
   { name: 'siret', label: 'SIRET' }, { name: 'rcs', label: 'RCS / RM' },
   { name: 'assuranceDecennale', label: 'Assurance décennale (assureur, n° de contrat, zone)', full: true },
 ];
-const refRow = (p, cur) => `<tr><td>${esc(p.label)}<div class="tiny muted">${esc(p.unite === '%' ? '%' : '€ / ' + p.unite)} · défaut ${p.min}–${p.max}</div></td>
-  <td><input class="input" type="number" inputmode="decimal" step="any" min="0" name="${p.key}.min" value="${cur.min}"></td>
-  <td><input class="input" type="number" inputmode="decimal" step="any" min="0" name="${p.key}.max" value="${cur.max}"></td></tr>`;
-const refTable = (id, titre, list, cur) => `<div class="card"><div class="card-head"><h2>${titre}</h2></div><div class="table-wrap"><table class="table perm-table" id="${id}"><thead><tr><th style="text-align:left">Prestation</th><th>Min</th><th>Max</th></tr></thead><tbody>${list.map((p) => refRow(p, cur[p.key])).join('')}</tbody></table></div></div>`;
-const readRef = (table, list) => Object.fromEntries(list.map((p) => [p.key, { min: Number(table.querySelector(`[name="${p.key}.min"]`).value || 0), max: Number(table.querySelector(`[name="${p.key}.max"]`).value || 0) }]));
+const numIn = (name, v) => `<td><input class="input" type="number" inputmode="decimal" step="any" min="0" name="${name}" value="${v ?? ''}"></td>`;
+const refRow = (p, cur, extra) => `<tr><td>${esc(p.label)}<div class="tiny muted">${esc(p.unite === '%' ? '%' : '€ / ' + p.unite)} · défaut ${p.min}–${p.max}${extra && p.heures != null ? ` · ${p.heures} h, ${p.cout} €` : ''}</div></td>
+  ${numIn(`${p.key}.min`, cur.min)}${numIn(`${p.key}.max`, cur.max)}${extra ? (p.heures != null || p.cout != null ? numIn(`${p.key}.heures`, cur.heures) + numIn(`${p.key}.cout`, cur.cout) : '<td></td><td></td>') : ''}</tr>`;
+const refTable = (id, titre, list, cur, extra = false) => `<div class="card ${extra ? 'span2' : ''}"><div class="card-head"><h2>${titre}</h2></div><div class="table-wrap"><table class="table perm-table" id="${id}"><thead><tr><th style="text-align:left">Prestation</th><th>Prix min</th><th>Prix max</th>${extra ? '<th>Temps (h / unité)</th><th>Matériaux (€ / unité)</th>' : ''}</tr></thead><tbody>${list.map((p) => refRow(p, cur[p.key], extra)).join('')}</tbody></table></div>${extra ? '<p class="tiny muted" style="margin:0;padding:10px 16px">Temps : heures de travail par m², ml, marche ou forfait (la pose sol et faïence suit le rendement au m²). Matériaux : ce que vous coûtent les produits inclus dans une prestation fourni-posé.</p>' : ''}</div>`;
+const readRef = (table, list) => Object.fromEntries(list.map((p) => {
+  const val = (k) => { const el = table.querySelector(`[name="${p.key}.${k}"]`); return el && el.value !== '' ? Number(el.value) : undefined; };
+  return [p.key, { min: val('min') ?? 0, max: val('max') ?? 0, heures: val('heures'), cout: val('cout') }];
+}));
 
 export default {
   main: {
@@ -40,7 +43,7 @@ export default {
         body = `<div class="stack">
           <p class="small muted" style="margin:0">Ces fourchettes servent d’indicateurs dans le <a href="#/outils" style="text-decoration:underline">chiffrage</a>. Prix HT pratiqués à Strasbourg et dans le Bas-Rhin pour une situation standard (carreaux 30 à 60 cm, pose droite, support sain). Les majorations (format, type de pose, accès…) s’appliquent automatiquement. Ajustez-les avec vos propres devis acceptés.</p>
           <div class="card card-pad"><h2 style="margin-top:0">Vos coûts internes</h2><form class="form" id="gest">${GESTION.map((g) => fieldHtml({ name: g.key, label: g.label, type: 'number', help: g.help }, ref.gestion)).join('')}</form></div>
-          <div class="grid g2">${refTable('t-prest', 'Prestations (pose seule)', PRESTATIONS, ref.prestations)}${refTable('t-fourn', 'Fournitures (prix d’achat)', FOURNITURES, ref.fournitures)}</div>
+          <div class="grid g2">${refTable('t-prest', 'Prestations facturées', PRESTATIONS, ref.prestations, true)}${refTable('t-fourn', 'Fournitures (prix d’achat)', FOURNITURES, ref.fournitures)}</div>
           ${canP ? '<div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" id="reset-prix">Revenir aux valeurs par défaut</button><button class="btn primary" id="save-prix">Enregistrer</button></div>' : ''}
         </div>`;
       }

@@ -103,7 +103,7 @@ export default {
 
   fromChild: {
     title: 'Chantier',
-    render: ({ params }) => { const r = store.get(params.id); setTimeout(() => app.go(r?.chantierId ? `#/chantier/${r.chantierId}?tab=${r.type === 'photo' ? 'photos' : 'journal'}` : '#/chantiers')); return ''; },
+    render: ({ params }) => { const r = store.get(params.id); setTimeout(() => app.go(!r?.chantierId && r?.visiteId ? `#/visite/${r.visiteId}` : r?.chantierId ? `#/chantier/${r.chantierId}?tab=${r.type === 'photo' ? 'photos' : 'journal'}` : '#/chantiers')); return ''; },
   },
 
   detail: {
