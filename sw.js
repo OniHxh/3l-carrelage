@@ -1,6 +1,6 @@
 // Service worker : interface disponible hors connexion + photos et devis servis depuis l'appareil.
 // À chaque mise à jour publiée, incrémenter CACHE.
-const CACHE = '3l-v5';
+const CACHE = '3l-v6';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/boot.js', 'js/app.js', 'js/core.js', 'js/store.js', 'js/ui.js', 'js/docs.js', 'js/local.js', 'js/cloud.js',

@@ -24,7 +24,7 @@ const F_SURFACE = [
 const F_SITUATION = [
   ...Object.entries(SITUATIONS).map(([name, s]) => ({
     name, label: s.label, type: 'select', default: s.options[0][0],
-    options: s.options.map(([v, l, pct]) => [v, pct ? `${l} (+${pct} %)` : l]),
+    options: s.options.map(([v, l, pct]) => [v, pct ? `${l} (${pct > 0 ? '+' : '−'}${Math.abs(pct)} %)` : l]),
   })),
   { name: 'distanceKm', label: 'Distance depuis le dépôt (km, aller)', type: 'number', default: 0 },
   { name: 'facturerDeplacement', label: 'Facturer le déplacement', type: 'select', options: [['oui', 'Oui, au-delà des km inclus'], ['non', 'Non (offert)']], default: 'oui' },

@@ -161,11 +161,18 @@ export const GESTION = [
 
 /** Majorations selon la situation du chantier (en % sur la pose). [valeur, libellé, %] */
 export const SITUATIONS = {
+  difficulte: { label: 'Difficulté générale', options: [['normale', 'Normale', 0], ['simple', 'Simple (grandes surfaces dégagées, peu de coupes)', -5], ['difficile', 'Difficile (nombreuses coupes, angles, niches)', 15], ['tres_difficile', 'Très difficile (travail de précision, pièce biscornue)', 30]] },
+  materiau: { label: 'Matériau', options: [['gres', 'Grès cérame / céramique', 0], ['pierre', 'Pierre naturelle (marbre, travertin, ardoise)', 25], ['zellige', 'Zellige / terre cuite / carreaux artisanaux', 30], ['verre', 'Mosaïque de verre', 20], ['ciment', 'Carreaux de ciment', 20]] },
   typePose: { label: 'Type de pose', options: [['droite', 'Droite / alignée', 0], ['decalee', 'Décalée (1/2, 1/3)', 5], ['diagonale', 'Diagonale', 15], ['opus', 'Opus / multi-formats', 20], ['chevron', 'Chevron / bâton rompu', 40]] },
   support: { label: 'État du support', options: [['bon', 'Bon : plan, sain, propre', 0], ['existant', 'Pose sur ancien carrelage', 5], ['reprendre', 'À reprendre (fissures, faux niveau)', 10], ['bois', 'Plancher bois', 15]] },
   piece: { label: 'Type de pièce', options: [['ouverte', 'Grande pièce ouverte, peu de découpes', 0], ['standard', 'Pièce standard', 5], ['sdb', 'Salle de bain / WC (beaucoup de découpes)', 15], ['exterieur', 'Extérieur / terrasse', 15]] },
   acces: { label: 'Accès au chantier', options: [['facile', 'Plain-pied ou ascenseur', 0], ['etage', 'Étage sans ascenseur', 8], ['centre', 'Centre de Strasbourg (stationnement, livraison)', 8], ['difficile', 'Accès très difficile', 15]] },
   occupe: { label: 'Logement', options: [['vide', 'Vide / neuf', 0], ['occupe', 'Occupé (protections, rangement, nettoyage)', 8]] },
+  obstacles: { label: 'Obstacles', options: [['peu', 'Peu (pièce dégagée)', 0], ['quelques', 'Quelques-uns (tuyaux, coffrages, radiateur)', 5], ['nombreux', 'Nombreux (tuyaux, niches, angles, meubles fixes)', 12]] },
+  hauteur: { label: 'Travail en hauteur', options: [['non', 'Non', 0], ['escabeau', 'Faïence jusqu’au plafond (escabeau)', 5], ['echafaudage', 'Grande hauteur / échafaudage', 15]] },
+  joints: { label: 'Joints et finition', options: [['standard', 'Joint ciment standard', 0], ['fin', 'Joint fin (≤ 2 mm), carreaux rectifiés', 10], ['epoxy', 'Joint époxy', 15]] },
+  calepinage: { label: 'Calepinage', options: [['libre', 'Libre', 0], ['impose', 'Imposé (centrage, raccords de motifs, alignement mur/sol)', 10], ['decor', 'Décor, frise, tapis ou motif complexe', 20]] },
+  chauffageSol: { label: 'Plancher chauffant', options: [['non', 'Non', 0], ['oui', 'Oui (natte de désolidarisation, protocole de mise en chauffe)', 5]] },
   delai: { label: 'Délai', options: [['normal', 'Normal', 0], ['urgent', 'Urgent / week-end', 15]] },
 };
 
@@ -308,6 +315,13 @@ export function aideChiffrage(v = {}, r = chiffrageChantier(v), ref = REFERENCE)
   if (v.support === 'existant') add('info', 'Pose sur ancien carrelage : vérifier l’adhérence, prévoir un primaire d’accrochage et une colle adaptée (C2S1). Attention aux hauteurs de seuil et de portes.', false);
   if (v.support === 'existant' && num(v.prixDeposeM2) > 0) add('warn', 'Dépose facturée alors que la pose est prévue sur l’ancien carrelage : vérifiez la situation.');
   if ((v.piece === 'sdb' || num(v.nbDouches) > 0) && !num(v.surfaceEtancheite)) add('warn', 'Zone de douche : une étanchéité sous carrelage (SPEC / SEL) est nécessaire. Ajoutez la surface concernée.', false);
+  if (v.materiau === 'pierre') add('info', 'Pierre naturelle : colle blanche déformable, traitement hydrofuge / anti-taches avant et après jointoiement (à facturer), pertes plus élevées.', false);
+  if (v.materiau === 'zellige' && num(v.perte) < 15) add('warn', 'Zellige / carreaux artisanaux : prévoir au moins 15 % de pertes (casse, tri des teintes).', false);
+  if (v.materiau === 'ciment') add('info', 'Carreaux de ciment : protéger avant jointoiement, traitement de surface (cire ou hydrofuge) à prévoir et facturer.', false);
+  if (v.joints === 'epoxy') add('info', 'Joint époxy : produit cher (environ 15 à 30 €/kg) et temps de nettoyage plus long. Vérifiez le prix du joint dans les fournitures.', false);
+  if (v.chauffageSol === 'oui') add('info', 'Plancher chauffant : chauffage coupé avant la pose, natte de désolidarisation conseillée, colle déformable (S1) et remise en chauffe progressive.', false);
+  if (v.hauteur === 'echafaudage') add('info', 'Grande hauteur : prévoir la location d’échafaudage dans les autres frais.');
+  if (v.difficulte === 'tres_difficile' || v.calepinage === 'decor') add('info', 'Chantier technique : prévoir une visite et un calepinage avant de confirmer le prix.', false);
   if (v.piece === 'exterieur') add('info', 'Extérieur : carrelage R11 minimum et non gélif, colle et joint adaptés au gel, pente d’au moins 1,5 % et joints de fractionnement.', false);
   if (L >= 60 && num(v.colleKgM2) < 7) add('info', 'Grand format : double encollage obligatoire, comptez environ 7 kg/m² de colle.', false);
   if (L > 0 && L <= 10 && num(v.colleKgM2) > 3.5) add('info', 'Mosaïque : environ 3,5 kg/m² de colle suffisent (peigne fin).', false);
