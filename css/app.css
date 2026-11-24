@@ -515,3 +515,15 @@ input[type="checkbox"] { accent-color: var(--red); width: 18px; height: 18px; }
 .pd-table thead { display: table-header-group; }
 .pd-table tr { break-inside: avoid; }
 .pd-totals, .pd-sign { break-inside: avoid; }
+
+/* Dossier de chantier (PDF) */
+.pd-h2 { font-size: 13pt; margin: 20px 0 8px; padding-bottom: 4px; border-bottom: 2px solid #D92332; break-after: avoid; }
+.pd-h3 { font-size: 10.5pt; margin: 12px 0 6px; color: #333; break-after: avoid; }
+.pd-p { margin: 0 0 8px; font-size: 10pt; line-height: 1.5; }
+.pd-kv td:first-child { width: 150px; color: #555; }
+.pd-photos { display: grid; gap: 8px; }
+.pd-photos figure { margin: 0; break-inside: avoid; }
+.pd-photos img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 4px; display: block; background: #f2f2f2; }
+.pd-photos figcaption { font-size: 8pt; color: #555; margin-top: 3px; line-height: 1.3; }
+.pd-break { break-before: page; }
+.pd-lines { height: 110px; margin: 4px 0 12px; background: repeating-linear-gradient(#fff 0 26px, #bbb 26px 27px); }

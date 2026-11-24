@@ -4,7 +4,7 @@ import * as store from '../store.js';
 import { app } from '../app.js';
 import { formModal, modal, toast, toastError, pickImages, photoSrc, lightbox, options, confirmDialog, fieldHtml, readForm, compressImage } from '../ui.js';
 import { chantierRisque, tempsChantier, todayISO, num, round2 } from '../../shared/calc.js';
-import { printChantierReport } from '../docs.js';
+import { partiesDossier, printDossierChantier } from '../docs.js';
 import { tacheForm, pointageForm } from './planning.js';
 import { auditTimeline } from './equipe.js';
 
@@ -207,7 +207,7 @@ export default {
           <div><div class="row" style="gap:8px;margin-bottom:6px"><a class="btn ghost sm" href="#/chantiers">${icon('back')}Chantiers</a><span class="tiny muted" style="font-weight:600">${esc(c.ref || '')}</span>${badge('chantier', c.statut)}${r.niveau === 'eleve' || r.niveau === 'moyen' ? badge('risque', r.niveau) : ''}</div><h1>${esc(c.nom)}</h1></div>
           <div class="actions">
             ${app.can('planning', 2) ? `<button class="btn ${chrono ? 'dark' : ''}" id="chrono">${icon('clock')}<span class="lbl" id="chrono-lbl">${chrono ? `Arrêter · ${fmtDuree(Date.now() - chrono)}` : 'Chrono'}</span></button>` : ''}
-            <button class="btn" id="report">${icon('print')}<span class="lbl">Rapport</span></button>
+            <button class="btn" id="report">${icon('print')}<span class="lbl">Dossier PDF</span></button>
             ${app.can('chantiers', 2) ? `<button class="btn" id="edit">${icon('edit')}<span class="lbl">Modifier</span></button><button class="btn primary" id="quick-photo">${icon('camera')}Photo</button>` : ''}
           </div></div>
         <div class="tabs">${tabs.map(([k, l]) => `<a class="tab ${tab === k ? 'active' : ''}" href="#/chantier/${c.id}?tab=${k}">${l}</a>`).join('')}</div>
@@ -220,12 +220,20 @@ export default {
       qs('#quick-photo', root)?.addEventListener('click', () => addPhotos(c.id));
       qs('#add-photo', root)?.addEventListener('click', () => addPhotos(c.id, qs('#phase', root).value));
       qs('#report', root).addEventListener('click', () => {
-        const recs = store.grouped();
-        const notes = recs.note.filter((n) => n.chantierId === c.id).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-        const photos = recs.photo.filter((p) => p.chantierId === c.id).slice(0, 12);
-        const extra = `${notes.length ? `<h3 style="margin:18px 0 8px">Journal</h3>${notes.map((n) => `<p style="margin:0 0 6px"><b>${fmtDate(n.date)}</b> — ${esc(n.texte)}</p>`).join('')}` : ''}
-          ${photos.length ? `<h3 style="margin:18px 0 8px">Photos</h3><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">${photos.map((p) => `<img src="${esc(photoSrc(p))}" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:4px">`).join('')}</div>` : ''}`;
-        printChantierReport(c, extra);
+        const parts = partiesDossier(store.get(c.id), { money: app.can('ca', 1) });
+        const m = modal({
+          title: 'Dossier du chantier (PDF)',
+          body: `<div class="stack"><p class="small muted" style="margin:0">Choisissez ce qui doit figurer dans le dossier, puis « Enregistrer en PDF » (dans la fenêtre d’impression, choisissez « Enregistrer au format PDF »).</p>
+            <div class="stack" style="gap:10px">${parts.map(([k, l, n, on]) => `<label class="check"><input type="checkbox" name="${k}" ${on ? 'checked' : ''}> ${esc(l)}${k !== 'infos' && k !== 'reception' ? ` <span class="muted small">(${n})</span>` : ''}</label>`).join('')}</div>
+            ${parts.some(([k]) => k === 'photos') ? `<label class="field"><span>Taille des photos</span><select class="input" name="ppl">${options([['2', 'Grandes (2 par ligne)'], ['3', 'Moyennes (3 par ligne)'], ['4', 'Petites (4 par ligne)']], '2')}</select></label>` : ''}</div>`,
+          foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" id="go-pdf">${icon('download')}Enregistrer en PDF</button>`,
+        });
+        qs('#go-pdf', m.el).addEventListener('click', () => {
+          const choix = Object.fromEntries(parts.map(([k]) => [k, qs(`[name="${k}"]`, m.el).checked]));
+          const ppl = Number(qs('[name=ppl]', m.el)?.value) || 2;
+          m.close();
+          printDossierChantier(store.get(c.id), choix, { photosParLigne: ppl });
+        });
       });
       const range = qs('#avancement', root);
       if (range) {
