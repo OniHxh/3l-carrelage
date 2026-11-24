@@ -4,7 +4,7 @@ import * as store from '../store.js';
 import { app } from '../app.js';
 import { formModal, modal, toast, toastError, pickImages, photoSrc, lightbox, options, confirmDialog, fieldHtml, readForm, compressImage } from '../ui.js';
 import { chantierRisque, tempsChantier, todayISO, num, round2 } from '../../shared/calc.js';
-import { partiesDossier, printDossierChantier } from '../docs.js';
+import { partiesDossier, pdfDossierChantier } from '../docs.js';
 import { tacheForm, pointageForm } from './planning.js';
 import { auditTimeline } from './equipe.js';
 
@@ -223,16 +223,16 @@ export default {
         const parts = partiesDossier(store.get(c.id), { money: app.can('ca', 1) });
         const m = modal({
           title: 'Dossier du chantier (PDF)',
-          body: `<div class="stack"><p class="small muted" style="margin:0">Choisissez ce qui doit figurer dans le dossier, puis « Enregistrer en PDF » (dans la fenêtre d’impression, choisissez « Enregistrer au format PDF »).</p>
+          body: `<div class="stack"><p class="small muted" style="margin:0">Choisissez ce qui doit figurer dans le dossier. Le fichier PDF est créé sur l’appareil, puis vous pouvez le télécharger, l’enregistrer ou l’envoyer.</p>
             <div class="stack" style="gap:10px">${parts.map(([k, l, n, on]) => `<label class="check"><input type="checkbox" name="${k}" ${on ? 'checked' : ''}> ${esc(l)}${k !== 'infos' && k !== 'reception' ? ` <span class="muted small">(${n})</span>` : ''}</label>`).join('')}</div>
             ${parts.some(([k]) => k === 'photos') ? `<label class="field"><span>Taille des photos</span><select class="input" name="ppl">${options([['2', 'Grandes (2 par ligne)'], ['3', 'Moyennes (3 par ligne)'], ['4', 'Petites (4 par ligne)']], '2')}</select></label>` : ''}</div>`,
-          foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" id="go-pdf">${icon('download')}Enregistrer en PDF</button>`,
+          foot: `<button class="btn" data-close>Annuler</button><button class="btn primary" id="go-pdf">${icon('download')}Créer le PDF</button>`,
         });
         qs('#go-pdf', m.el).addEventListener('click', () => {
           const choix = Object.fromEntries(parts.map(([k]) => [k, qs(`[name="${k}"]`, m.el).checked]));
           const ppl = Number(qs('[name=ppl]', m.el)?.value) || 2;
           m.close();
-          printDossierChantier(store.get(c.id), choix, { photosParLigne: ppl });
+          pdfDossierChantier(store.get(c.id), choix, { photosParLigne: ppl });
         });
       });
       const range = qs('#avancement', root);

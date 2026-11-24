@@ -1,8 +1,8 @@
-// Devis simplifié depuis le calculateur : lignes rédigées automatiquement, modifiables, puis PDF (Imprimer → Enregistrer en PDF).
+// Devis simplifié depuis le calculateur : lignes rédigées automatiquement, modifiables, puis fichier PDF (js/pdf.js).
 import { esc, qs, qsa, fmtDate, icon } from './core.js';
 import * as store from './store.js';
-import { modal, toast } from './ui.js';
-import { printDoc, companyBlock } from './docs.js';
+import { modal, toast, toastError } from './ui.js';
+import { nouveauPdf, proposerPdf, attentePdf } from './pdf.js';
 import { SITUATIONS, num, round2, todayISO } from '../shared/calc.js';
 
 const eur = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
@@ -63,7 +63,7 @@ export function devisModal(v, r, { client = {}, chantier = null } = {}) {
   const m = modal({
     title: 'Devis (PDF)', wide: true,
     body: `<div class="stack">
-      <p class="small muted" style="margin:0">Les prestations sont rédigées d’après le calculateur. Modifiez les textes, quantités et prix si besoin, puis « Enregistrer en PDF » (dans la fenêtre d’impression, choisissez « Enregistrer au format PDF »).</p>
+      <p class="small muted" style="margin:0">Les prestations sont rédigées d’après le calculateur. Modifiez les textes, quantités et prix si besoin, puis « Créer le PDF » : vous pourrez le télécharger, l’enregistrer ou l’envoyer.</p>
       <div class="form">
         <label class="field"><span>Client</span><input class="input" name="c_nom" value="${esc(client.nom || '')}"></label>
         <label class="field"><span>Téléphone / e-mail</span><input class="input" name="c_contact" value="${esc([client.tel, client.email].filter(Boolean).join(' · '))}"></label>
@@ -79,7 +79,7 @@ export function devisModal(v, r, { client = {}, chantier = null } = {}) {
       <div class="devis-totaux" id="totaux"></div>
       <label class="field"><span>Conditions et remarques (en bas du devis)</span><textarea class="input" name="notes" rows="4">${esc(conditions(v, tva))}</textarea></label>
     </div>`,
-    foot: `<button class="btn" data-close>Fermer</button><button class="btn primary" id="pdf">${icon('download')}Enregistrer en PDF</button>`,
+    foot: `<button class="btn" data-close>Fermer</button><button class="btn primary" id="pdf">${icon('download')}Créer le PDF</button>`,
   });
   const el = m.el;
   const tbody = qs('.devis-edit tbody', el);
@@ -103,27 +103,29 @@ export function devisModal(v, r, { client = {}, chantier = null } = {}) {
     qs('tr:last-child textarea', tbody).focus(); calc();
   });
   calc();
-  qs('#pdf', el).addEventListener('click', () => {
+  qs('#pdf', el).addEventListener('click', async () => {
     const val = (n) => qs(`[name=${n}]`, el).value.trim();
     const ls = lire();
     if (!ls.length) { toast('Aucune ligne dans le devis.'); return; }
     const { ht, tv } = calc();
     const date = val('date') || todayISO();
-    const html = `<div class="pd-bar"></div>
-      <div class="pd-head"><div><img src="icons/logo.png" alt="">${companyBlock(s)}</div>
-        <div class="pd-title"><h1>DEVIS</h1>${val('numero') ? `<div class="n">N° ${esc(val('numero'))}</div>` : ''}<div style="margin-top:6px;font-size:10pt;color:#444">Date : ${fmtDate(date)}<br>Valable ${esc(val('validite') || '30')} jours</div></div></div>
-      <div class="pd-parties">
-        <div class="pd-box"><div class="lbl">Client</div><b>${esc(val('c_nom') || '—')}</b>${val('c_contact') ? `<br>${esc(val('c_contact'))}` : ''}</div>
-        <div class="pd-box"><div class="lbl">Chantier</div><b>${esc(val('objet'))}</b>${val('c_adresse') ? `<br>${esc(val('c_adresse'))}` : ''}</div>
-      </div>
-      <table class="pd-table"><thead><tr><th>Désignation</th><th class="r">Qté</th><th>Unité</th><th class="r">PU HT</th><th class="r">Total HT</th></tr></thead><tbody>
-        ${ls.map((l) => `<tr><td>${esc(l.designation).replace(/\n/g, '<br>')}</td><td class="r">${nb(l.qte)}</td><td>${esc(l.unite)}</td><td class="r">${eur(l.pu)}</td><td class="r">${eur(l.qte * l.pu)}</td></tr>`).join('')}
-      </tbody></table>
-      <div class="pd-totals"><div><span>Total HT</span><b>${eur(ht)}</b></div><div><span>TVA ${nb(tva)} %</span><b>${eur(tv)}</b></div><div class="ttc"><span>Total TTC</span><span>${eur(ht + tv)}</span></div></div>
-      ${val('notes') ? `<div class="pd-foot">${esc(val('notes')).replace(/\n/g, '<br>')}</div>` : ''}
-      ${s.entreprise?.assuranceDecennale ? `<div class="pd-foot">Assurance décennale : ${esc(s.entreprise.assuranceDecennale)}</div>` : ''}
-      <div class="pd-sign"><div>Date et signature du client, précédées de la mention « Bon pour accord »</div><div>L’entreprise</div></div>`;
-    printDoc(html, `Devis ${val('c_nom') || ''} ${date}`.trim());
+    const titre = `Devis ${val('numero') || ''} ${val('c_nom') || ''} ${date}`.replace(/\s+/g, ' ').trim();
+    const att = attentePdf();
+    try {
+      const w = await nouveauPdf(titre);
+      await w.entete({ entreprise: s.entreprise || {}, titre: 'DEVIS', ref: val('numero') ? `N° ${val('numero')}` : '', lignes: [`Date : ${fmtDate(date)}`, `Valable ${val('validite') || '30'} jours`] });
+      w.encadres([{ label: 'Client', lignes: [val('c_nom') || '-', val('c_contact')] }, { label: 'Chantier', lignes: [val('objet'), val('c_adresse')] }]);
+      w.tableau([{ label: 'Désignation', w: 0.5 }, { label: 'Qté', w: 0.09, align: 'right' }, { label: 'Unité', w: 0.1 }, { label: 'PU HT', w: 0.14, align: 'right' }, { label: 'Total HT', w: 0.17, align: 'right' }],
+        ls.map((l) => [l.designation, nb(l.qte), l.unite, eur(l.pu), eur(l.qte * l.pu)]));
+      w.totaux([['Total HT', eur(ht)], [`TVA ${nb(tva)} %`, eur(tv)], ['Total TTC', eur(ht + tv), true]]);
+      if (val('notes')) w.texte(val('notes'), { size: 8.5, color: [85, 85, 85] });
+      if (s.entreprise?.assuranceDecennale) w.texte(`Assurance décennale : ${s.entreprise.assuranceDecennale}`, { size: 8.5, color: [85, 85, 85] });
+      w.espace(2);
+      w.signatures(['Date et signature du client, précédées de la mention « Bon pour accord »', 'L’entreprise']);
+      const blob = w.fin();
+      att.close();
+      proposerPdf(blob, titre);
+    } catch (e) { att.close(); toastError(e); }
   });
 }
 
